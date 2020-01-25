@@ -14,6 +14,9 @@ global $itemtype;
 	<?= $model->formStart("save", array("class" => "i:defaultNew labelstyle:inject")) ?>
 		<fieldset>
 			<?= $model->input("name") ?>
+			<?= $model->input("concept_group") ?>
+			<?= $model->input("type", ["value" => "word"]) ?>
+			<?= $model->input("origin", ["value" => "process"]) ?>
 		</fieldset>
 
 		<?= $JML->newActions() ?>

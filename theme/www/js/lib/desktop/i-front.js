@@ -11,6 +11,10 @@ Util.Objects["front"] = new function() {
 
 		scene.ready = function() {
 			// u.bug("scene.ready:", this);
+
+			this.seed_form = u.qs(".seed_form");
+
+			u.f.init(this.seed_form);
 		}
 
 		// scene is ready

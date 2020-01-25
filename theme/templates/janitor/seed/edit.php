@@ -18,11 +18,21 @@ $item = $IC->getItem(array("id" => $item_id, "extend" => array("tags" => true, "
 		<?= $model->formStart("update/".$item["id"], array("class" => "labelstyle:inject")) ?>
 
 			<fieldset>
-				<?= $model->input("published_at", array("value" => $item["published_at"])) ?>
+				<?= $model->input("name", ["value" => $item["name"]]) ?>
+			</fieldset>
 
-				<?= $model->input("name", array("value" => $item["name"])) ?>
-				<?= $model->input("v_text", array("class" => "autoexpand short", "value" => $item["v_text"])) ?>
-				<?= $model->inputHTML("v_html", array("value" => $item["v_html"])) ?>
+			<?= $JML->editActions($item) ?>
+
+		<?= $model->formEnd() ?>
+	</div>
+
+	<div class="item i:defaultEdit i:collapseHeader">
+		<h2>Type and origin</h2>
+		<?= $model->formStart("update/".$item["id"], array("class" => "labelstyle:inject")) ?>
+
+			<fieldset>
+				<?= $model->input("type", ["value" => $item["type"]]) ?>
+				<?= $model->input("origin", ["value" => $item["origin"]]) ?>
 			</fieldset>
 
 			<?= $JML->editActions($item) ?>

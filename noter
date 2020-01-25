@@ -1,0 +1,15 @@
+Muligvis skal hvert seed have en begrebsgruppe – skal vi ikke kunne bruge en frase til at udfylde begrebsgrupperne
+
+Fraserne er p.t. den største udfordring. Hvordan holder man styr på dem?
+
+Næste skridt: prøve at starte fra frontend
+
+Tabel-javascript: http://tabulator.info
+
+Et frø kan også være en sætning. Hvis en frø er en sætning, skal sætningen deles op i ord og fraser. Det er et problem, jeg tackler senere. 
+Indtil videre bygger jeg sætninger op af ord og ordforbindelser.
+
+
+TODO:
+seed-kø
+fraser
