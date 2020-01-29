@@ -64,18 +64,18 @@ if($action) {
 		exit();
 	}
 
-	elseif(count($action) == 2 && $action[0] == "save"  && $page->validateCsrfToken())	{
+	elseif(count($action) == 2 && $action[0] == "update"  && $page->validateCsrfToken())	{
 
 		$seed = $model->update($action);
 
 		// save
 		if($seed) {
-			message()->addMessage("Opdateret");
+			// message()->addMessage("Opdateret"); 
 			header("Location: /seed/rediger/".$seed["id"]);
 			exit();
 		}
 
-		// could not create reset request
+		// could not update
 		else {
 			message()->addMessage("Beklager, det virkede ikke.", array("type" => "error"));
 			header("Location: /");

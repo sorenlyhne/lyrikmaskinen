@@ -26,8 +26,8 @@ Util.Objects["seeds"] = new function() {
 			data:response, //assign data to table
 			layout:"fitColumns", //fit columns to width of table (optional)
 			columns:[ //Define Table Columns
+				{title:"Begrebsgruppe", field:"concept_group", align:"left"},
 				{title:"Ord", field:"name", width:150},
-				{title:"Begrebsgruppe", field:"concept_group", align:"left", formatter:"progress"},
 				{title:"Ordklasse", field:"col"},
 			],
 			rowClick:function(e, row){ //trigger an alert message when the row is clicked

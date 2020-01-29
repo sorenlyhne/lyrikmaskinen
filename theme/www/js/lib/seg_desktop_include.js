@@ -11,4 +11,5 @@ document.write('<script type="text/javascript" src="/js/lib/desktop/i-front.js">
 document.write('<script type="text/javascript" src="/js/lib/desktop/i-demo.js"></script>');
 document.write('<script type="text/javascript" src="/js/lib/desktop/i-login.js"></script>');
 document.write('<script type="text/javascript" src="/js/lib/desktop/i-seeds.js"></script>');
+document.write('<script type="text/javascript" src="/js/lib/desktop/i-seed_edit.js"></script>');
 

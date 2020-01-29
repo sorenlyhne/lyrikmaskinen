@@ -41,6 +41,7 @@ class TypeSeed extends Itemtype {
 		$this->addToModel("concept_group", array(
 			"type" => "select",
 			"label" => "Begrebsgruppe",
+			"required" => true,
 			"options" => [
 				""	=> "Begrebsgruppe",
 				"1" => "Natur og miljø",
@@ -73,6 +74,7 @@ class TypeSeed extends Itemtype {
 		$this->addToModel("word_class", array(
 			"type" => "select",
 			"label" => "Ordklasse",
+			"required" => true,
 			"options" => [
 				""	=> "Ordklasse",
 				"1" => "Substantiv, person",
@@ -123,6 +125,37 @@ class TypeSeed extends Itemtype {
 
 	}
 
+	function updated($item_id) {
+
+		$IC = new Items();
+		
+		$seed =  $IC->getItem(["id" => $item_id, "extend" => true]);
+		
+		if(isset($seed["concept_group"]) && isset($seed["word_class"])) {
+
+			$concept_group = $seed["concept_group"];
+			$word_class	= $seed["word_class"];
+			
+			$query = new Query();
+
+			$sql = "SELECT * FROM ".$this->db." WHERE concept_group = '$concept_group' AND word_class = '$word_class'";
+			if($query->sql($sql)) {
+
+				$results = $query->results();
+				
+				$que_position = count($results);
+
+				$sql = "UPDATE ".$this->db." SET que_position = $que_position WHERE item_id = $item_id";
+				if($query->sql($sql)) {
+
+					message()->resetMessages();
+					message()->addMessage("Tilføjet som nummer $que_position i køen");	
+
+				}
+			}
+		}
+	}
+
 	function getSeedsJson() {
 
 		$IC = new Items();
@@ -130,6 +163,11 @@ class TypeSeed extends Itemtype {
 		$seeds = $IC->getItems(["itemtype" => "seed", "extend" => true]);
 
 		if($seeds) {
+
+			foreach($seeds as $seed) {
+
+				
+			}
 
 			return json_encode($seeds);
 		}
