@@ -1,8 +1,13 @@
 CREATE TABLE `SITE_DB`.`item_word` (
   `id` int(11) NOT NULL auto_increment,
   `item_id` int(11) NOT NULL,
+  `original_id` int(11) NOT NULL,
 
   `name` varchar(255) NOT NULL,
+  `extended_pos` varchar(255) DEFAULT NULL,
+  `morphology` varchar(255) DEFAULT NULL,
+  `decomp` varchar(255) DEFAULT NULL,
+  `decpos` varchar(255) DEFAULT NULL,
 
 
   PRIMARY KEY  (`id`),

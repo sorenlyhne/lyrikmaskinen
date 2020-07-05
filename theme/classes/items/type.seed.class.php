@@ -42,31 +42,6 @@ class TypeSeed extends Itemtype {
 			"type" => "select",
 			"label" => "Begrebsgruppe",
 			"required" => true,
-			"options" => [
-				""	=> "Begrebsgruppe",
-				"1" => "Natur og miljø",
-				"2" => "Liv",
-				"3" => "Rum, form",
-				"4" => "Størrelse, mængde, tal, grad",
-				"5" => "Forhold, egenskab",
-				"6" => "Tid",
-				"7" => "Sanseindtryk, tilstandsformer",
-				"8" => "Sted og bevægelse",
-				"9" => "Vilje og handling",
-				"10" => "Følelser",
-				"11" => "Tænkning",
-				"12" => "Tegn, meddelelse, sprog",
-				"13" => "Videnskab",
-				"14" => "Kunst og kultur",
-				"15" => "Socialt liv",
-				"16" => "Mad og drikke",
-				"17" => "Sport og fritid",
-				"18" => "Samfund",
-				"19" => "Apparater, teknik",
-				"20" => "Økonomi, finans",
-				"21" => "Ret, etik",
-				"22" => "Religion, overnaturlig"
-			],
 			"hint_message" => "Vælg den begrebsgruppe, som sangfrøet tilhører.",
 			"error_message" => "Du skal vælge en begrebsgruppe."
 		));
@@ -174,6 +149,10 @@ class TypeSeed extends Itemtype {
 		
 		return false;
 
+	}
+
+	function getConceptGroups() {
+		
 	}
 
 }

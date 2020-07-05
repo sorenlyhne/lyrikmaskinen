@@ -32,7 +32,7 @@ $seed = $IC->getItem(["id" => $seed_id, "extend" => true]);
 		<?= $model->formStart("/seed/update/$seed_id", ["class" => "labelstyle:inject seed_edit"]); ?>
 			<?= $model->input("name", ["value" => $seed["name"]]); ?>
 			<!-- <?= $model->input("origin", ["value" => $seed["origin"]]); ?> -->
-			<?= $model->input("concept_group", ["value" => $seed["concept_group"]]); ?>
+			<?= $model->input("concept_group", ["value" => $seed["concept_group", "options" => $model->toOptions]]); ?>
 			<?= $model->input("word_class", ["value" => $seed["word_class"]]); ?>
 
 			
