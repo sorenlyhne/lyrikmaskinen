@@ -41,3 +41,9 @@ tilføj forkortelsesmarkører
 
 # Spørgsmål
 - hvordan skal rim på bitryk blandes med rim på hovedtryk?
+
+# tanker
+- word-klassen bør måske hedde 'Dictionary'
+- måske skal rimordbogen og den fonetiske søgemaskine bruge den samme søgefuntion. Måske er rimordbogen bare et interface til søgemaskinen?
+
+FONETISK SØGEMASKINE

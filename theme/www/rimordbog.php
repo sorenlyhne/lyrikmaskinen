@@ -20,9 +20,9 @@ $page->pageTitle("Rimordbog");
 
 if($action) {
 
-	if($action[0] == "getResults") {
+	if($action[0] == "rhymeSearch") {
 
-		$rhymes = $WC->getResults($action);
+		$rhymes = $WC->rhymeSearch($action);
 
 		if($rhymes) {
 			

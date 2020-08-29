@@ -48,6 +48,15 @@ class Word extends Model {
 			"type" => "integer",
 			"label" => "original_id",
 		));
+
+		define("VOWELS_REGEX", "i:|i|y:|y|e:|e|2:|2|9:|9|E:|E|u:|u|o:|o|O:|O|Q:|Q|6|A:|A|a|a:|@");
+		define("CONSONANTS_REGEX", "p|b|t|d|k|g|f|v|s|h|s\'|m|n|N|R|l|j|D|w");
+		define("SINGABLE_CONSONANTS_REGEX", "m|n|N|R|l|j|D|w");
+		define("PLOSIVES_REGEX", "p|b|t|d|k|g");
+		define("NASALS_REGEX", "m|n|N");
+		define("FRICATIVES_REGEX", "f|v|s|h|s\'");
+		define("SHORT_CONSONANTS_REGEX", PLOSIVES_REGEX."|".FRICATIVES_REGEX);
+		define("STRESS_REGEX", "\"|%");
 		
 	}
 
@@ -174,7 +183,7 @@ class Word extends Model {
 
 	}
 
-	function getResults($action) {
+	function rhymeSearch($action) {
 
 		$this->getPostedEntities();
 
@@ -184,21 +193,12 @@ class Word extends Model {
 
 			$word = getPost("query");
 			$exclude_proper_names = getPost("exclude_proper_names");
+			$discard_stoed = getPost("discard_stoed");
 
 			$sql = "SELECT * FROM ".$this->db." WHERE name = '$word' COLLATE UTF8_DANISH_CI";
 			if($query->sql($sql)) {
 
 				$matches = $query->results();
-
-				
-				
-				$vowels_regex = "i:|i|y:|y|e:|e|2:|2|9:|9|E:|E|u:|u|o:|o|O:|O|Q:|Q|6|A:|A|a|a:|@";
-				$consonants_regex = "p|b|t|d|k|g|f|v|s|h|s\'|m|n|N|R|l|j|D|w";
-				$singable_consonants_regex = "m|n|N|R|l|j|D|w";
-				$plosives_regex = "p|b|t|d|k|g";
-				$nasals_regex = "m|n|N";
-				$fricatives_regex = "f|v|s|h|s\'";
-				$stress_regex = "\"|%";
 				
 				$phonetic_relatives = [
 					"p" => ["b", "t", "k", "d", "g"],
@@ -208,7 +208,7 @@ class Word extends Model {
 					"k" => ["g", "t", "p", "d", "b"],
 					"g" => ["k", "d", "b", "t", "p"],
 					"f" => ["v", "s", "s\'", "h"],
-					"v" => ["f", "s", "s\'", "h"],
+					"v" => ["w", "f", "s", "s\'", "h"],
 					"s" => ["s\'", "f", "h", "v"],
 					// s' er sj
 					"s\'" => ["s", "f", "h", "v"],
@@ -217,7 +217,10 @@ class Word extends Model {
 					"n" => ["m", "N"],
 					// N er ng
 					"N" => ["n", "m"],
-					"l" => ["D"]
+					"l" => ["D"],
+					// D er blødt d
+					"D" => ["l"],
+					"w" => ["v"]
 					
 				];
 
@@ -229,32 +232,53 @@ class Word extends Model {
 				// leksikalsk ordgrænse = _
 				// vokallængde = :
 
-				// EKSEMPEL
-				// trumf (rimord)
-				// triumf (perfekt)
-				// bums / luns (familie)
-				// umpf / umft (perfekt plus lydsvag konsonant)
-				// dum (perfekt minus lydsvag konsonant)
-				// grumt (perfekt, minus lydsvag konsonant, plus en anden lydsvag, ikke-familiær konsonant)
-				// gunst / lumsk (familie + lydsvag konsonant )
-				// lund (familie - lydsvag konsonant)
-				// ondt (familie, minus lydsvag konsonant, plus en anden lydsvag, ikke-familiær konsonant) 
-
 				// @todo handle heteronyms
 				// foreach($matches as $match) {
 
 				// 	$match["transcriptions"]
 				// }
 
+				$all_rhymes = [];
+				
+				$perfect_rhymes = false;
+				$family_rhymes = false;
+				
+				$perfect_add_plosive_rhymes = false;
+				$perfect_add_plosives_rhymes = false;
+				$perfect_subtract_plosive_rhymes = false;
+				$perfect_subtract_plosives_rhymes = false;
+				$perfect_add_fricative_rhymes = false;
+				$perfect_add_fricatives_rhymes = false;
+				$perfect_subtract_fricative_rhymes = false;
+				$perfect_subtract_fricatives_rhymes = false;
+				$perfect_add_short_consonants_rhymes = false;
+				$perfect_subtract_short_consonants_rhymes = false;
+				$perfect_subtract_add_short_consonants_rhymes = false;
+				
+				$family_add_plosive_rhymes = false;
+				$family_add_plosives_rhymes = false;
+				$family_subtract_plosive_rhymes = false;
+				$family_subtract_plosives_rhymes = false;
+				$family_add_fricative_rhymes = false;
+				$family_add_fricatives_rhymes = false;
+				$family_subtract_fricative_rhymes = false;
+				$family_subtract_fricatives_rhymes = false;
+				$family_add_short_consonants_rhymes = false;
+				$family_subtract_short_consonants_rhymes = false;
+				$family_subtract_add_short_consonants_rhymes = false;
+				
+				$additive_rhymes = false;
+				$subtractive_rhymes = false;
+				$misc_rhymes = false;
 
 				// find transcriptions
 				$sql = "SELECT transcription FROM ".$this->db_transcriptions." WHERE word_id = ".$matches[0]["id"];
 				if($query->sql($sql)) {
-
+					
 					$transcriptions =$query->results("transcription"); 
 					
 				}
-
+				
 				// @todo handle multiple transcriptions
 				// choose first transcription for now
 				$transcription = $transcriptions[0];
@@ -302,11 +326,11 @@ class Word extends Model {
 					}
 
 					// split syllable into parts
-					preg_match('/(['.$consonants_regex.']*)(['.$vowels_regex.'])(['.$consonants_regex.'|?|:]*)/', $syllable, $syllable_parts);
+					preg_match('/(['.CONSONANTS_REGEX.']*)(['.VOWELS_REGEX.'])(['.CONSONANTS_REGEX.'|?|:]*)/', $syllable, $syllable_parts);
 					
 					// get beginning consonants
 					if($syllable_parts[1]) {
-						preg_match_all('/'.$consonants_regex.'/', $syllable_parts[1], $beginning_consonants);
+						preg_match_all('/'.CONSONANTS_REGEX.'/', $syllable_parts[1], $beginning_consonants);
 						$syllables[$syllable]["beginning_consonants"] = $beginning_consonants[0];
 					}
 					
@@ -318,7 +342,7 @@ class Word extends Model {
 
 					// get ending consonants
 					if($syllable_parts[3]) {
-						preg_match_all('/'.$consonants_regex.'/', $syllable_parts[3], $ending_consonants);
+						preg_match_all('/'.CONSONANTS_REGEX.'/', $syllable_parts[3], $ending_consonants);
 						$syllables[$syllable]["ending_consonants"] = $ending_consonants[0];
 						// debug($ending_consonants);
 					}
@@ -329,324 +353,1282 @@ class Word extends Model {
 				$syllable_count = count($syllables);
 				$stressed_syllable_count = count($stressed_syllables);
 				
-				if($syllable_count == 1) {
 
+				
+				if($syllable_count == 1) {
+					
 					// remove syllables before primary stressed syllable
 					// $rhyming_syllable = preg_split('/"/', $transcription)[1];
-
+					
 					$syllable = $syllables[arrayKeyValue($syllables, "position", "0")];
+					
 
-					$rhyming_syllable_perfect = $syllable["vowel"];
+					
+					if(1 && "PERFECT RHYMES") {
 
-					if($syllable["vowel_long"]) {
-						$rhyming_syllable_perfect .= ":";
-						if($syllable["stoed"]) {
-							$rhyming_syllable_perfect .= "\\\?";
-						}
-					}
-
-					if($syllable["ending_consonants"]) {
-						$stoed_isset = false;
-						foreach($syllable["ending_consonants"] as $consonant) {
-							if(preg_match("/".$singable_consonants_regex."/", $consonant) && !$syllable["vowel_long"] && $syllable["stoed"] && !$stoed_isset) {
-								
-								$rhyming_syllable_perfect .= $consonant."\\\?";
-								$stoed_isset = true;
-								
-							}
-							else {
-								
-								$rhyming_syllable_perfect .= $consonant;
-							}
-						}
+						$rhyming_syllable_perfect = $this->queryPerfect($syllable, ["discard_stoed" => $discard_stoed]);
+						
+						$perfect_rhymes = $this->findRhymes($rhyming_syllable_perfect);
+						$all_rhymes = array_merge($all_rhymes, $perfect_rhymes);
 					}
 					
-					debug("perfect rhyme: ".$rhyming_syllable_perfect);	
-					
-					// escape special characters in rhyming syllable
-					// $rhyming_syllable_perfect = str_replace("'", "\'", $rhyming_syllable_perfect);
-					
-					$perfect_rhymes = $this->findRhymes($rhyming_syllable_perfect);
-					$rhymes["single_syllable"]["perfect"] = $perfect_rhymes;
-					
-					
-					// FAMILY RHYMES
-					if($syllable["ending_consonants"]) {
-						
-						$rhyming_syllable_family = $syllable["vowel"];
-						
-						if($syllable["vowel_long"]) {
-							$rhyming_syllable_family .= ":";
-							if($syllable["stoed"]) {
-								$rhyming_syllable_family .= "\\\?";
-							}
-						}
-						
-						$stoed_isset = false;
-						foreach($syllable["ending_consonants"] as $consonant) {
+					if(1 && "FAMILY RHYMES") {
 
-							$consonant_family = implode("|", $phonetic_relatives[$consonant]);
+						if($syllable["ending_consonants"]) {
+							
+							$rhyming_syllable_family = $syllable["vowel"];
+							
 
-							if(preg_match("/".$singable_consonants_regex."/", $consonant) && !$syllable["vowel_long"] && $syllable["stoed"] && !$stoed_isset) {
-								
-								$rhyming_syllable_family .= "(".$consonant."|".$consonant_family.")\\\?";
-								$stoed_isset = true;
-								
+							if($discard_stoed) {
+								$rhyming_syllable_family .= "(:)?";
+								$rhyming_syllable_family .= "(\\\?)?";
 							}
 							else {
-								
-								$rhyming_syllable_family .= "(".$consonant."|".$consonant_family.")";
-							}
-						}
-						debug("family rhyme: ".$rhyming_syllable_family);
-
-						$results = $this->findRhymes($rhyming_syllable_family);
-						if($results) {
-
-							foreach($results as $result) {
-
-								// remove overlaps with perfect rhymes
-								if(arrayKeyValue($perfect_rhymes,"id", $result["id"]) === false) {
-									
-									$family_rhymes[] = $result;
+	
+								if($syllable["vowel_long"]) {
+									$rhyming_syllable_family .= ":";
+									if($syllable["stoed"]) {
+										$rhyming_syllable_family .= "\\\?";
+									}
 								}
 							}
+							
+							$stoed_isset = false;
+							foreach($syllable["ending_consonants"] as $consonant) {
+	
+								$consonant_family = implode("|", $phonetic_relatives[$consonant]);
 
+								if($discard_stoed) {
+									
+									if(preg_match("/".SINGABLE_CONSONANTS_REGEX."/", $consonant) && !$stoed_isset) {
+										
+										$rhyming_syllable_family .= "(".$consonant."|".$consonant_family.")(\\\?)?";
+										$stoed_isset = true;
+										
+									}
+									else {
+										
+										$rhyming_syllable_family .= "(".$consonant."|".$consonant_family.")";
+									}
+								}
+								else {
+
+									if(preg_match("/".SINGABLE_CONSONANTS_REGEX."/", $consonant) && !$syllable["vowel_long"] && $syllable["stoed"] && !$stoed_isset) {
+										
+										$rhyming_syllable_family .= "(".$consonant."|".$consonant_family.")\\\?";
+										$stoed_isset = true;
+										
+									}
+									else {
+										
+										$rhyming_syllable_family .= "(".$consonant."|".$consonant_family.")";
+									}
+								}
+	
+							}
+
+							debug("family rhyme: ".$rhyming_syllable_family);
+	
+							$results = $this->findRhymes($rhyming_syllable_family, [
+								"discard_stoed" => $discard_stoed
+							]);
+							if($results) {
+	
+								foreach($results as $result) {
+	
+									// don't repeat rhymes
+									if(arrayKeyValue($all_rhymes,"id", $result["id"]) === false) {
+										
+										$all_rhymes[] = $result;
+										$family_rhymes[] = $result;
+									}
+								}
+	
+							}
+							
 						}
-						
-						$rhymes["single_syllable"]["family"] = $family_rhymes;
 					}
 
-					// PERFECT RHYMES WITH SHORT CONSONANT(S) ADDED
-					$rhyming_syllable_perfect_add_short_consonant = $syllable["vowel"];
+					if(1 && "PERFECT RHYMES WITH ADDED PLOSIVE") {
 
-					if($syllable["vowel_long"]) {
-						$rhyming_syllable_perfect_add_short_consonant .= ":";
-						if($syllable["stoed"]) {
-							$rhyming_syllable_perfect_add_short_consonant .= "\\\?";
+						$perfect_add_plosive_patterns = [];
+
+						$perfect_add_plosive_base = $syllable["vowel"];
+	
+						if($discard_stoed) {
+							$perfect_add_plosive_base .= "(:)?";
+							$perfect_add_plosive_base .= "(\\\?)?";
+						}
+						else {
+
+							if($syllable["vowel_long"]) {
+								$perfect_add_plosive_base .= ":";
+								if($syllable["stoed"]) {
+									$perfect_add_plosive_base .= "\\\?";
+								}
+							}
+						}
+
+						if($syllable["ending_consonants"]) {
+
+							$ending_consonants_stoed = [];
+
+							$stoed_isset = false;
+							foreach($syllable["ending_consonants"] as $consonant) {
+
+								if($discard_stoed) {
+									
+									if(preg_match("/".SINGABLE_CONSONANTS_REGEX."/", $consonant) && !$stoed_isset) {
+										
+										$ending_consonants_stoed[] = $consonant."(\\\?)?";
+										$stoed_isset = true;
+										
+									}
+									else {
+										$ending_consonants_stoed[] = $consonant;
+									}
+								}
+								else {
+
+									if(preg_match("/".SINGABLE_CONSONANTS_REGEX."/", $consonant) && !$syllable["vowel_long"] && $syllable["stoed"] && !$stoed_isset) {
+										
+										$ending_consonants_stoed[] = $consonant."\\\?";
+										$stoed_isset = true;
+										
+									}
+									else {
+										$ending_consonants_stoed[] = $consonant;
+									}
+								}
+
+							}
+							
+							
+							$perfect_add_plosive_patterns[] = "(".$perfect_add_plosive_base."(".PLOSIVES_REGEX.")".implode("", $ending_consonants_stoed).")";
+							
+							foreach($ending_consonants_stoed as $key => $consonant) {
+
+								$preceding_consonants = implode("", array_slice($ending_consonants_stoed, 0, $key));
+								$proceding_consonants = implode("", array_slice($ending_consonants_stoed, $key+1));
+
+								$perfect_add_plosive_patterns[] = "(".$perfect_add_plosive_base.$preceding_consonants.$consonant."(".PLOSIVES_REGEX.")".$proceding_consonants.")";
+							}
+
+						}
+						else {
+							
+							$perfect_add_plosive_patterns[] = "(".$perfect_add_plosive_base."(".PLOSIVES_REGEX."))";
+						}
+
+						
+						if($perfect_add_plosive_patterns) {
+							
+							$perfect_add_plosive_query = "(".implode("|", $perfect_add_plosive_patterns).")";
+							debug("perfect_add_plosive rhyme: ".$perfect_add_plosive_query);	
+
+							$results = $this->findRhymes($perfect_add_plosive_query);
+							if($results) {
+		
+								foreach($results as $result) {
+		
+									// don't repeat rhymes
+									if(arrayKeyValue($all_rhymes,"id", $result["id"]) === false) {
+										
+										$all_rhymes[] = $result;
+										$perfect_add_plosive_rhymes[] = $result;
+									}
+								}
+							}
+						}
+	
+					}
+
+					if(1 && "PERFECT RHYMES WITH SUBTRACTED PLOSIVE") {
+
+						$perfect_subtract_plosive_patterns = [];
+						
+						$perfect_subtract_plosive_base = $syllable["vowel"];
+	
+						if($discard_stoed) {
+							$perfect_subtract_plosive_base .= "(:)?";
+							$perfect_subtract_plosive_base .= "(\\\?)?";
+						}
+						else {
+
+							if($syllable["vowel_long"]) {
+								$perfect_subtract_plosive_base .= ":";
+								if($syllable["stoed"]) {
+									$perfect_subtract_plosive_base .= "\\\?";
+								}
+							}
+						}
+
+						if($syllable["ending_consonants"]) {
+
+							$ending_consonants_stoed = [];
+
+							$stoed_isset = false;
+							foreach($syllable["ending_consonants"] as $consonant) {
+
+								if($discard_stoed) {
+
+									if(preg_match("/".SINGABLE_CONSONANTS_REGEX."/", $consonant) && !$stoed_isset) {
+										
+										$ending_consonants_stoed[] = $consonant."\\\?";
+										$stoed_isset = true;
+										
+									}
+									else {
+										$ending_consonants_stoed[] = $consonant;
+									}
+								}
+								else {
+
+									if(preg_match("/".SINGABLE_CONSONANTS_REGEX."/", $consonant) && !$syllable["vowel_long"] && $syllable["stoed"] && !$stoed_isset) {
+										
+										$ending_consonants_stoed[] = $consonant."\\\?";
+										$stoed_isset = true;
+										
+									}
+									else {
+										$ending_consonants_stoed[] = $consonant;
+									}
+								}
+								
+
+							}
+							
+
+							foreach($ending_consonants_stoed as $key => $consonant) {
+
+								$preceding_consonants = implode("", array_slice($ending_consonants_stoed, 0, $key));
+								$proceding_consonants = implode("", array_slice($ending_consonants_stoed, $key+1));
+
+								if(preg_match("/".PLOSIVES_REGEX."/", $consonant)) {
+									$perfect_subtract_plosive_patterns[] = "(".$perfect_subtract_plosive_base.$preceding_consonants.$proceding_consonants.")";
+								}
+
+							}
+
+							
+						}
+						
+						if($perfect_subtract_plosive_patterns) {
+						
+							$perfect_subtract_plosive_query = "(".implode("|", $perfect_subtract_plosive_patterns).")";
+							debug("perfect_subtract_plosive rhyme: ".$perfect_subtract_plosive_query);	
+							
+							$results = $this->findRhymes($perfect_subtract_plosive_query, [
+								"discard_stoed" => $discard_stoed
+							]);
+							if($results) {
+		
+								foreach($results as $result) {
+		
+									// don't repeat rhymes
+									if(arrayKeyValue($all_rhymes,"id", $result["id"]) === false) {
+										
+										$all_rhymes[] = $result;
+										$perfect_subtract_plosive_rhymes[] = $result;
+									}
+								}
+		
+							}
+		
+						}
+					}
+					
+					if(1 && "PERFECT RHYMES WITH ADDED PLOSIVES") {
+
+						$perfect_add_plosives_base = $syllable["vowel"];
+	
+						if($discard_stoed) {
+							$perfect_add_plosives_base .= "(:)?";
+							$perfect_add_plosives_base .= "(\\\?)?";
+						}
+						else {
+
+							if($syllable["vowel_long"]) {
+								$perfect_add_plosives_base .= ":";
+								if($syllable["stoed"]) {
+									$perfect_add_plosives_base .= "\\\?";
+								}
+							}
+						}
+
+						$perfect_add_plosives_query = $perfect_add_plosives_base."(".PLOSIVES_REGEX.")*";
+						
+						if($syllable["ending_consonants"]) {
+
+							$stoed_isset = false;
+							foreach($syllable["ending_consonants"] as $consonant) {
+
+								if($discard_stoed) {
+									
+									if(preg_match("/".SINGABLE_CONSONANTS_REGEX."/", $consonant) && !$stoed_isset) {
+										
+										$perfect_add_plosives_query .= $consonant."(\\\?)?(".PLOSIVES_REGEX.")*";
+										$stoed_isset = true;
+										
+									}
+									else {
+										$perfect_add_plosives_query .= $consonant."(".PLOSIVES_REGEX.")*";
+									}
+								}
+								else {
+
+									if(preg_match("/".SINGABLE_CONSONANTS_REGEX."/", $consonant) && !$syllable["vowel_long"] && $syllable["stoed"] && !$stoed_isset) {
+										
+										$perfect_add_plosives_query .= $consonant."\\\?(".PLOSIVES_REGEX.")*";
+										$stoed_isset = true;
+										
+									}
+									else {
+										$perfect_add_plosives_query .= $consonant."(".PLOSIVES_REGEX.")*";
+									}
+								}
+
+							}
+							
+							
+						}
+						
+
+						
+						debug("perfect_add_plosives rhyme: ".$perfect_add_plosives_query);	
+
+						$results = $this->findRhymes($perfect_add_plosives_query);
+						if($results) {
+	
+							foreach($results as $result) {
+	
+								// don't repeat rhymes
+								if(arrayKeyValue($all_rhymes,"id", $result["id"]) === false) {
+									
+									$all_rhymes[] = $result;
+									$perfect_add_plosives_rhymes[] = $result;
+								}
+							}
+						}
+	
+					}
+
+					if(1 && "PERFECT RHYMES WITH SUBTRACTED PLOSIVES") {
+
+						$perfect_subtract_plosives_query = $syllable["vowel"];
+	
+						if($discard_stoed) {
+							$perfect_subtract_plosives_query .= "(:)?";
+							$perfect_subtract_plosives_query .= "(\\\?)?";
+						}
+						else {
+
+							if($syllable["vowel_long"]) {
+								$perfect_subtract_plosives_query .= ":";
+								if($syllable["stoed"]) {
+									$perfect_subtract_plosives_query .= "\\\?";
+								}
+							}
+						}
+
+						if($syllable["ending_consonants"]) {
+
+							$plosive_found = false;
+							$stoed_isset = false;
+							foreach($syllable["ending_consonants"] as $consonant) {
+
+								if($discard_stoed) {
+									
+									if(preg_match("/".SINGABLE_CONSONANTS_REGEX."/", $consonant) && !$stoed_isset) {
+										
+										$perfect_subtract_plosives_query .= $consonant."(\\\?)?";
+										$stoed_isset = true;
+										
+									}
+									elseif(preg_match("/".PLOSIVES_REGEX."/", $consonant)) {
+										$plosive_found = true;
+
+										$perfect_subtract_plosives_query .= $consonant."?";
+									}
+									else {
+										$perfect_subtract_plosives_query .= $consonant;
+									}
+								}
+								else {
+
+									if(preg_match("/".SINGABLE_CONSONANTS_REGEX."/", $consonant) && !$syllable["vowel_long"] && $syllable["stoed"] && !$stoed_isset) {
+										
+										$perfect_subtract_plosives_query .= $consonant."\\\?";
+										$stoed_isset = true;
+										
+									}
+									elseif(preg_match("/".PLOSIVES_REGEX."/", $consonant)) {
+										$plosive_found = true;
+
+										$perfect_subtract_plosives_query .= $consonant."?";
+									}
+									else {
+										$perfect_subtract_plosives_query .= $consonant;
+									}
+								}
+
+							}
+
+							if(!$plosive_found) {
+								$perfect_subtract_plosives_query = false;
+							}
+							
+							
+						}
+						
+
+						
+						debug("perfect_subtract_plosives rhyme: ".$perfect_subtract_plosives_query);	
+
+						$results = $this->findRhymes($perfect_subtract_plosives_query);
+						if($results) {
+	
+							foreach($results as $result) {
+	
+								// don't repeat rhymes
+								if(arrayKeyValue($all_rhymes,"id", $result["id"]) === false) {
+									
+									$all_rhymes[] = $result;
+									$perfect_subtract_plosives_rhymes[] = $result;
+								}
+							}
+						}
+	
+					}
+					
+					if(1 && "PERFECT RHYMES WITH ADDED FRICATIVE") {
+
+						$perfect_add_fricative_patterns = [];
+
+						$perfect_add_fricative_base = $syllable["vowel"];
+	
+						if($discard_stoed) {
+							$perfect_add_fricative_base .= "(:)?";
+							$perfect_add_fricative_base .= "(\\\?)?";
+						}
+						else {
+
+							if($syllable["vowel_long"]) {
+								$perfect_add_fricative_base .= ":";
+								if($syllable["stoed"]) {
+									$perfect_add_fricative_base .= "\\\?";
+								}
+							}
+						}
+
+						if($syllable["ending_consonants"]) {
+
+							$ending_consonants_stoed = [];
+
+							$stoed_isset = false;
+							foreach($syllable["ending_consonants"] as $consonant) {
+
+								if($discard_stoed) {
+									
+									if(preg_match("/".SINGABLE_CONSONANTS_REGEX."/", $consonant) && !$stoed_isset) {
+										
+										$ending_consonants_stoed[] = $consonant."(\\\?)?";
+										$stoed_isset = true;
+										
+									}
+									else {
+										$ending_consonants_stoed[] = $consonant;
+									}
+								}
+								else {
+
+									if(preg_match("/".SINGABLE_CONSONANTS_REGEX."/", $consonant) && !$syllable["vowel_long"] && $syllable["stoed"] && !$stoed_isset) {
+										
+										$ending_consonants_stoed[] = $consonant."\\\?";
+										$stoed_isset = true;
+										
+									}
+									else {
+										$ending_consonants_stoed[] = $consonant;
+									}
+								}
+
+							}
+							
+							
+							$perfect_add_fricative_patterns[] = "(".$perfect_add_fricative_base."(".FRICATIVES_REGEX.")".implode("", $ending_consonants_stoed).")";
+							
+							foreach($ending_consonants_stoed as $key => $consonant) {
+
+								$preceding_consonants = implode("", array_slice($ending_consonants_stoed, 0, $key));
+								$proceding_consonants = implode("", array_slice($ending_consonants_stoed, $key+1));
+
+								$perfect_add_fricative_patterns[] = "(".$perfect_add_fricative_base.$preceding_consonants.$consonant."(".FRICATIVES_REGEX.")".$proceding_consonants.")";
+							}
+
+						}
+						else {
+							
+							$perfect_add_fricative_patterns[] = "(".$perfect_add_fricative_base."(".FRICATIVES_REGEX."))";
+						}
+
+						
+						if($perfect_add_fricative_patterns) {
+							
+							$perfect_add_fricative_query = "(".implode("|", $perfect_add_fricative_patterns).")";
+							debug("perfect_add_fricative rhyme: ".$perfect_add_fricative_query);	
+
+							$results = $this->findRhymes($perfect_add_fricative_query);
+							if($results) {
+		
+								foreach($results as $result) {
+		
+									// don't repeat rhymes
+									if(arrayKeyValue($all_rhymes,"id", $result["id"]) === false) {
+										
+										$all_rhymes[] = $result;
+										$perfect_add_fricative_rhymes[] = $result;
+									}
+								}
+							}
+						}
+	
+					}
+
+					if(1 && "PERFECT RHYMES WITH SUBTRACTED FRICATIVE") {
+
+						$perfect_subtract_fricative_patterns = [];
+						
+						$perfect_subtract_fricative_base = $syllable["vowel"];
+	
+						if($discard_stoed) {
+							$perfect_subtract_fricative_base .= "(:)?";
+							$perfect_subtract_fricative_base .= "(\\\?)?";
+						}
+						else {
+
+							if($syllable["vowel_long"]) {
+								$perfect_subtract_fricative_base .= ":";
+								if($syllable["stoed"]) {
+									$perfect_subtract_fricative_base .= "\\\?";
+								}
+							}
+						}
+
+						if($syllable["ending_consonants"]) {
+
+							$ending_consonants_stoed = [];
+
+							$stoed_isset = false;
+							foreach($syllable["ending_consonants"] as $consonant) {
+
+								if($discard_stoed) {
+
+									if(preg_match("/".SINGABLE_CONSONANTS_REGEX."/", $consonant) && !$stoed_isset) {
+										
+										$ending_consonants_stoed[] = $consonant."\\\?";
+										$stoed_isset = true;
+										
+									}
+									else {
+										$ending_consonants_stoed[] = $consonant;
+									}
+								}
+								else {
+
+									if(preg_match("/".SINGABLE_CONSONANTS_REGEX."/", $consonant) && !$syllable["vowel_long"] && $syllable["stoed"] && !$stoed_isset) {
+										
+										$ending_consonants_stoed[] = $consonant."\\\?";
+										$stoed_isset = true;
+										
+									}
+									else {
+										$ending_consonants_stoed[] = $consonant;
+									}
+								}
+								
+
+							}
+							
+
+							foreach($ending_consonants_stoed as $key => $consonant) {
+
+								$preceding_consonants = implode("", array_slice($ending_consonants_stoed, 0, $key));
+								$proceding_consonants = implode("", array_slice($ending_consonants_stoed, $key+1));
+
+								if(preg_match("/".FRICATIVES_REGEX."/", $consonant)) {
+									$perfect_subtract_fricative_patterns[] = "(".$perfect_subtract_fricative_base.$preceding_consonants.$proceding_consonants.")";
+								}
+
+							}
+
+							
+						}
+						
+						if($perfect_subtract_fricative_patterns) {
+						
+							$perfect_subtract_fricative_query = "(".implode("|", $perfect_subtract_fricative_patterns).")";
+							debug("perfect_subtract_fricative rhyme: ".$perfect_subtract_fricative_query);	
+							
+							$results = $this->findRhymes($perfect_subtract_fricative_query, [
+								"discard_stoed" => $discard_stoed
+							]);
+							if($results) {
+		
+								foreach($results as $result) {
+		
+									// don't repeat rhymes
+									if(arrayKeyValue($all_rhymes,"id", $result["id"]) === false) {
+										
+										$all_rhymes[] = $result;
+										$perfect_subtract_fricative_rhymes[] = $result;
+									}
+								}
+		
+							}
+		
+						}
+					}
+					
+					if(1 && "PERFECT RHYMES WITH ADDED FRICATIVES") {
+
+						$perfect_add_fricatives_base = $syllable["vowel"];
+	
+						if($discard_stoed) {
+							$perfect_add_fricatives_base .= "(:)?";
+							$perfect_add_fricatives_base .= "(\\\?)?";
+						}
+						else {
+
+							if($syllable["vowel_long"]) {
+								$perfect_add_fricatives_base .= ":";
+								if($syllable["stoed"]) {
+									$perfect_add_fricatives_base .= "\\\?";
+								}
+							}
+						}
+
+						$perfect_add_fricatives_query = $perfect_add_fricatives_base."(".FRICATIVES_REGEX.")*";
+						
+						if($syllable["ending_consonants"]) {
+
+							$stoed_isset = false;
+							foreach($syllable["ending_consonants"] as $consonant) {
+
+								if($discard_stoed) {
+									
+									if(preg_match("/".SINGABLE_CONSONANTS_REGEX."/", $consonant) && !$stoed_isset) {
+										
+										$perfect_add_fricatives_query .= $consonant."(\\\?)?(".FRICATIVES_REGEX.")*";
+										$stoed_isset = true;
+										
+									}
+									else {
+										$perfect_add_fricatives_query .= $consonant."(".FRICATIVES_REGEX.")*";
+									}
+								}
+								else {
+
+									if(preg_match("/".SINGABLE_CONSONANTS_REGEX."/", $consonant) && !$syllable["vowel_long"] && $syllable["stoed"] && !$stoed_isset) {
+										
+										$perfect_add_fricatives_query .= $consonant."\\\?(".FRICATIVES_REGEX.")*";
+										$stoed_isset = true;
+										
+									}
+									else {
+										$perfect_add_fricatives_query .= $consonant."(".FRICATIVES_REGEX.")*";
+									}
+								}
+
+							}
+							
+							
+						}
+						
+
+						
+						debug("perfect_add_fricatives rhyme: ".$perfect_add_fricatives_query);	
+
+						$results = $this->findRhymes($perfect_add_fricatives_query);
+						if($results) {
+	
+							foreach($results as $result) {
+	
+								// don't repeat rhymes
+								if(arrayKeyValue($all_rhymes,"id", $result["id"]) === false) {
+									
+									$all_rhymes[] = $result;
+									$perfect_add_fricatives_rhymes[] = $result;
+								}
+							}
+						}
+	
+					}
+
+					if(1 && "PERFECT RHYMES WITH SUBTRACTED FRICATIVES") {
+
+						$perfect_subtract_fricatives_query = $syllable["vowel"];
+	
+						if($discard_stoed) {
+							$perfect_subtract_fricatives_query .= "(:)?";
+							$perfect_subtract_fricatives_query .= "(\\\?)?";
+						}
+						else {
+
+							if($syllable["vowel_long"]) {
+								$perfect_subtract_fricatives_query .= ":";
+								if($syllable["stoed"]) {
+									$perfect_subtract_fricatives_query .= "\\\?";
+								}
+							}
+						}
+
+						if($syllable["ending_consonants"]) {
+
+							$fricative_found = false;
+							$stoed_isset = false;
+							foreach($syllable["ending_consonants"] as $consonant) {
+
+								if($discard_stoed) {
+									
+									if(preg_match("/".SINGABLE_CONSONANTS_REGEX."/", $consonant) && !$stoed_isset) {
+										
+										$perfect_subtract_fricatives_query .= $consonant."(\\\?)?";
+										$stoed_isset = true;
+										
+									}
+									elseif(preg_match("/".FRICATIVES_REGEX."/", $consonant)) {
+										$fricative_found = true;
+
+										$perfect_subtract_fricatives_query .= $consonant."?";
+									}
+									else {
+										$perfect_subtract_fricatives_query .= $consonant;
+									}
+								}
+								else {
+
+									if(preg_match("/".SINGABLE_CONSONANTS_REGEX."/", $consonant) && !$syllable["vowel_long"] && $syllable["stoed"] && !$stoed_isset) {
+										
+										$perfect_subtract_fricatives_query .= $consonant."\\\?";
+										$stoed_isset = true;
+										
+									}
+									elseif(preg_match("/".FRICATIVES_REGEX."/", $consonant)) {
+										$fricative_found = true;
+
+										$perfect_subtract_fricatives_query .= $consonant."?";
+									}
+									else {
+										$perfect_subtract_fricatives_query .= $consonant;
+									}
+								}
+
+							}
+
+							if(!$fricative_found) {
+								$perfect_subtract_fricatives_query = false;
+							}
+							
+							
+						}
+						
+
+						
+						debug("perfect_subtract_fricatives rhyme: ".$perfect_subtract_fricatives_query);	
+
+						$results = $this->findRhymes($perfect_subtract_fricatives_query);
+						if($results) {
+	
+							foreach($results as $result) {
+	
+								// don't repeat rhymes
+								if(arrayKeyValue($all_rhymes,"id", $result["id"]) === false) {
+									
+									$all_rhymes[] = $result;
+									$perfect_subtract_fricatives_rhymes[] = $result;
+								}
+							}
+						}
+	
+					}
+
+					if(0 && "PERFECT RHYMES WITH SHORT CONSONANT(S) ADDED") {
+
+						$rhyming_syllable_perfect_add_short_consonants = $syllable["vowel"];
+	
+						if($syllable["vowel_long"]) {
+							$rhyming_syllable_perfect_add_short_consonants .= ":";
+							if($syllable["stoed"]) {
+								$rhyming_syllable_perfect_add_short_consonants .= "\\\?";
+							}
+						}
+	
+						if($syllable["ending_consonants"]) {
+							$rhyming_syllable_perfect_add_short_consonants .= "(".SHORT_CONSONANTS_REGEX.")*";
+							
+							$stoed_isset = false;
+							foreach($syllable["ending_consonants"] as $consonant) {
+								if(preg_match("/".SINGABLE_CONSONANTS_REGEX."/", $consonant) && !$syllable["vowel_long"] && $syllable["stoed"] && !$stoed_isset) {
+									
+									$rhyming_syllable_perfect_add_short_consonants .= $consonant."\\\?(".SHORT_CONSONANTS_REGEX.")*";
+									$stoed_isset = true;
+									
+								}
+								else {
+									
+									$rhyming_syllable_perfect_add_short_consonants .= $consonant."(".SHORT_CONSONANTS_REGEX.")*";
+								}
+							}
+	
+						}
+						else {
+							$rhyming_syllable_perfect_add_short_consonants .= "(".SHORT_CONSONANTS_REGEX.")*";
+						}
+						
+						debug("perfect_add_short_consonants rhyme: ".$rhyming_syllable_perfect_add_short_consonants);	
+	
+						$results = $this->findRhymes($rhyming_syllable_perfect_add_short_consonants);
+						if($results) {
+	
+							foreach($results as $result) {
+	
+								// don't repeat rhymes
+								if(arrayKeyValue($all_rhymes,"id", $result["id"]) === false) {
+									
+									$all_rhymes[] = $result;
+									$perfect_add_short_consonants_rhymes[] = $result;
+								}
+							}
+	
+						}
+	
+					}
+
+					if(0 && "PERFECT RHYMES WITH SHORT CONSONANT(S) SUBTRACTED") {
+						
+						$rhyming_syllable_perfect_subtract_short_consonants = $syllable["vowel"];
+	
+						if($syllable["vowel_long"]) {
+							$rhyming_syllable_perfect_subtract_short_consonants .= ":";
+							if($syllable["stoed"]) {
+								$rhyming_syllable_perfect_subtract_short_consonants .= "\\\?";
+							}
+						}
+	
+						if($syllable["ending_consonants"]) {
+	
+							$stoed_isset = false;
+							foreach($syllable["ending_consonants"] as $consonant) {
+								if(preg_match("/".SINGABLE_CONSONANTS_REGEX."/", $consonant) && !$syllable["vowel_long"] && $syllable["stoed"] && !$stoed_isset) {
+									
+									$rhyming_syllable_perfect_subtract_short_consonants .= $consonant."\\\?";
+									$stoed_isset = true;
+									
+								}
+								elseif(preg_match("/".SHORT_CONSONANTS_REGEX."/", $consonant)) {
+									
+									$rhyming_syllable_perfect_subtract_short_consonants .= $consonant."?";
+								}
+								else {
+									
+									$rhyming_syllable_perfect_subtract_short_consonants .= $consonant;
+								}
+							}
+						}
+						
+						debug("perfect_subtract_short_consonants rhyme: ".$rhyming_syllable_perfect_subtract_short_consonants);	
+	
+						$results = $this->findRhymes($rhyming_syllable_perfect_subtract_short_consonants);
+						if($results) {
+	
+							foreach($results as $result) {
+	
+								// don't repeat rhymes
+								if(arrayKeyValue($all_rhymes,"id", $result["id"]) === false) {
+									
+									$all_rhymes[] = $result;
+									$perfect_subtract_short_consonants_rhymes[] = $result;
+								}
+							}
+	
 						}
 					}
 
-					if($syllable["ending_consonants"]) {
+					// erstat evt. med "substitute plosives with fricatives and vice versa, if there is one of each"
+					if(0 && "PERFECT RHYMES WITH SHORT CONSONANT(S) SUBTRACTED AND SHORT, NON-FAMILIAR CONSONANT(S) ADDED ") {
+						$rhyming_syllable_perfect_subtract_add_short_consonants = $syllable["vowel"];
+	
+						if($syllable["vowel_long"]) {
+							$rhyming_syllable_perfect_subtract_add_short_consonants .= ":";
+							if($syllable["stoed"]) {
+								$rhyming_syllable_perfect_subtract_add_short_consonants .= "\\\?";
+							}
+						}
+	
+						if($syllable["ending_consonants"]) {
 
-						$rhyming_syllable_perfect_add_short_consonant .= "(".$plosives_regex.")?";
+							$stoed_isset = false;
+							foreach($syllable["ending_consonants"] as $consonant) {
+								if(preg_match("/".SINGABLE_CONSONANTS_REGEX."/", $consonant) && !$syllable["vowel_long"] && $syllable["stoed"] && !$stoed_isset) {
+									
+									$rhyming_syllable_perfect_subtract_add_short_consonants .= $consonant."\\\?(".SHORT_CONSONANTS_REGEX.")?";
+									$stoed_isset = true;
+									
+								}
+								elseif(preg_match("/".SHORT_CONSONANTS_REGEX."/", $consonant)) {
+									
+									$rhyming_syllable_perfect_subtract_add_short_consonants .= "(".SHORT_CONSONANTS_REGEX.")";
+								}
+								else {
+									
+									$rhyming_syllable_perfect_subtract_add_short_consonants .= $consonant;
+								}
+							}
+						}
 						
+						debug("perfect_subtract_add_short_consonants rhyme: ".$rhyming_syllable_perfect_subtract_add_short_consonants);	
+	
+						$results = $this->findRhymes($rhyming_syllable_perfect_subtract_add_short_consonants);
+						if($results) {
+	
+							foreach($results as $result) {
+	
+								// don't repeat rhymes
+								if(arrayKeyValue($all_rhymes,"id", $result["id"]) === false) {
+									
+									$all_rhymes[] = $result;
+									$perfect_subtract_add_short_consonants_rhymes[] = $result;
+								}
+							}
+	
+						}
+					}
+
+					if(0 && "FAMILY RHYMES WITH SHORT CONSONANT(S) ADDED ") {
+						
+						$family_add_short_consonants = $syllable["vowel"];
+	
+						if($syllable["vowel_long"]) {
+							$family_add_short_consonants .= ":";
+							if($syllable["stoed"]) {
+								$family_add_short_consonants .= "\\\?";
+							}
+						}
+	
+						if($syllable["ending_consonants"]) {
+							$family_add_short_consonants .= "(".SHORT_CONSONANTS_REGEX.")*";
+							
+							
+							$stoed_isset = false;
+							foreach($syllable["ending_consonants"] as $consonant) {
+								$consonant_family = implode("|", $phonetic_relatives[$consonant]);
+
+								if(preg_match("/".SINGABLE_CONSONANTS_REGEX."/", $consonant) && !$syllable["vowel_long"] && $syllable["stoed"] && !$stoed_isset) {
+									
+									$family_add_short_consonants .= "(".$consonant."|".$consonant_family.")\\\?(".SHORT_CONSONANTS_REGEX.")*";
+									$stoed_isset = true;
+									
+								}
+								else {
+									
+									$family_add_short_consonants .= "(".$consonant."|".$consonant_family.")(".SHORT_CONSONANTS_REGEX.")*";
+								}
+							}
+	
+						}
+						
+						debug("family_add_short_consonants rhyme: ".$family_add_short_consonants);	
+	
+						$results = $this->findRhymes($family_add_short_consonants);
+						if($results) {
+	
+							foreach($results as $result) {
+	
+								// don't repeat rhymes
+								if(arrayKeyValue($all_rhymes,"id", $result["id"]) === false) {
+									
+									$all_rhymes[] = $result;
+									$family_add_short_consonants_rhymes[] = $result;
+								}
+							}
+	
+						}
+					}
+
+					if(0 && "FAMILY RHYMES WITH SHORT CONSONANT(S) SUBTRACTED ") {
+						$family_subtract_short_consonants = $syllable["vowel"];
+	
+						if($syllable["vowel_long"]) {
+							$family_subtract_short_consonants .= ":";
+							if($syllable["stoed"]) {
+								$family_subtract_short_consonants .= "\\\?";
+							}
+						}
+	
+						if($syllable["ending_consonants"]) {
+							
+							
+							$stoed_isset = false;
+							foreach($syllable["ending_consonants"] as $consonant) {
+								
+								$consonant_family = implode("|", $phonetic_relatives[$consonant]);
+								
+								if(preg_match("/".SINGABLE_CONSONANTS_REGEX."/", $consonant) && !$syllable["vowel_long"] && $syllable["stoed"] && !$stoed_isset) {
+									
+									$family_subtract_short_consonants .= "(".$consonant."|".$consonant_family.")\\\?";
+									$stoed_isset = true;
+									
+								}
+								elseif(preg_match("/".SHORT_CONSONANTS_REGEX."/", $consonant)) {
+									
+									$family_subtract_short_consonants .= "(".$consonant."|".$consonant_family.")?";
+								}
+								else {
+									
+									$family_subtract_short_consonants .= "(".$consonant."|".$consonant_family.")";
+								}
+							}
+						}
+						
+						debug("family_subtract_short_consonants rhyme: ".$family_subtract_short_consonants);	
+	
+						$results = $this->findRhymes($family_subtract_short_consonants);
+						if($results) {
+	
+							foreach($results as $result) {
+	
+								// don't repeat rhymes
+								if(arrayKeyValue($all_rhymes,"id", $result["id"]) === false) {
+									
+									$all_rhymes[] = $result;
+									$family_subtract_short_consonants_rhymes[] = $result;
+								}
+							}
+	
+						}
+					}
+
+					if(0 && "FAMILY RHYMES WITH SHORT CONSONANT(S) SUBTRACTED AND SHORT, NON-FAMILIAR CONSONANT(S) ADDED ") {
+						
+					}
+
+					if(0 && "additive rhymes") {
+
+						// ADDITIVE RHYMES
+						$rhyming_syllable_additive = $syllable["vowel"];
+						
+						if($syllable["vowel_long"]) {
+							$rhyming_syllable_additive .= ":";
+							if($syllable["stoed"]) {
+								$rhyming_syllable_additive .= "\\\?";
+							}
+						}
+	
 						$stoed_isset = false;
-						foreach($syllable["ending_consonants"] as $consonant) {
-							if(preg_match("/".$singable_consonants_regex."/", $consonant) && !$syllable["vowel_long"] && $syllable["stoed"] && !$stoed_isset) {
-								
-								$rhyming_syllable_perfect_add_short_consonant .= $consonant."\\\?(".$plosives_regex.")?";
-								$stoed_isset = true;
-								
-							}
-							else {
-								
-								$rhyming_syllable_perfect_add_short_consonant .= $consonant."(".$plosives_regex.")?";
-							}
-						}
-					}
-					
-					debug("perfect_add_short_consonant rhyme: ".$rhyming_syllable_perfect_add_short_consonant);	
-
-					$results = $this->findRhymes($rhyming_syllable_perfect_add_short_consonant);
-					if($results) {
-
-						foreach($results as $result) {
-
-							// remove overlaps with perfect rhymes and family rhymes
-							if(
-								arrayKeyValue($perfect_rhymes,"id", $result["id"]) === false
-								&& arrayKeyValue($family_rhymes,"id", $result["id"]) === false
-								) {
-								
-								$perfect_add_short_consonant_rhymes[] = $result;
-							}
-						}
-
-					}
-
-					$rhymes["single_syllable"]["perfect_add_short_consonant"] = $perfect_add_short_consonant_rhymes;
-
-					// PERFECT RHYMES WITH SHORT CONSONANT(S) SUBTRACTED
-					// PERFECT RHYMES WITH SHORT CONSONANT(S) SUBTRACTED AND SHORT, NON-FAMILIAR CONSONANT(S) ADDED 
-					// FAMILY RHYMES WITH SHORT CONSONANT(S) ADDED
-					// FAMILY RHYMES WITH SHORT CONSONANT(S) SUBTRACTED
-					// FAMILY RHYMES WITH SHORT CONSONANT(S) SUBTRACTED AND SHORT, NON-FAMILIAR CONSONANT(S) ADDED
-					
-
-
-					// ADDITIVE RHYMES
-					$rhyming_syllable_additive = $syllable["vowel"];
-					
-					if($syllable["vowel_long"]) {
-						$rhyming_syllable_additive .= ":";
-						if($syllable["stoed"]) {
-							$rhyming_syllable_additive .= "\\\?";
-						}
-					}
-
-					$stoed_isset = false;
-					if($syllable["ending_consonants"]) {
-
-						$rhyming_syllable_additive .= "(".$consonants_regex.")?";
-
-						foreach($syllable["ending_consonants"] as $consonant) {
+						if($syllable["ending_consonants"]) {
 	
-							if(preg_match("/".$singable_consonants_regex."/", $consonant) && !$syllable["vowel_long"] && $syllable["stoed"] && !$stoed_isset) {
-								
-								$rhyming_syllable_additive .= "(".$consonant.")\\\?(".$consonants_regex.")?";
-								$stoed_isset = true;
-								
-							}
-							else {
-								
-								$rhyming_syllable_additive .= "(".$consonant.")(".$consonants_regex.")?";
-							}
-						}
-					}
-					else {
-
-						$rhyming_syllable_additive .= "(".$consonants_regex.")";
-					}
-					debug("additive rhyme: ".$rhyming_syllable_additive);
-
-					$results = $this->findRhymes($rhyming_syllable_additive);
-					if($results) {
-
-						foreach($results as $result) {
-
-							// remove overlaps with perfect rhymes and family rhymes
-							if(
-								arrayKeyValue($perfect_rhymes,"id", $result["id"]) === false
-								&& arrayKeyValue($family_rhymes,"id", $result["id"]) === false
-								) {
-								
-								$additive_rhymes[] = $result;
+							$rhyming_syllable_additive .= "(".CONSONANTS_REGEX.")?";
+	
+							foreach($syllable["ending_consonants"] as $consonant) {
+		
+								if(preg_match("/".SINGABLE_CONSONANTS_REGEX."/", $consonant) && !$syllable["vowel_long"] && $syllable["stoed"] && !$stoed_isset) {
+									
+									$rhyming_syllable_additive .= "(".$consonant.")\\\?(".CONSONANTS_REGEX.")?";
+									$stoed_isset = true;
+									
+								}
+								else {
+									
+									$rhyming_syllable_additive .= "(".$consonant.")(".CONSONANTS_REGEX.")?";
+								}
 							}
 						}
-
+						else {
+	
+							$rhyming_syllable_additive .= "(".CONSONANTS_REGEX.")";
+						}
+						debug("additive rhyme: ".$rhyming_syllable_additive);
+	
+						$results = $this->findRhymes($rhyming_syllable_additive);
+						if($results) {
+	
+							foreach($results as $result) {
+	
+								// remove overlaps with perfect rhymes and family rhymes
+								if(
+									arrayKeyValue($perfect_rhymes,"id", $result["id"]) === false
+									&& arrayKeyValue($family_rhymes,"id", $result["id"]) === false
+									) {
+									
+									$additive_rhymes[] = $result;
+								}
+							}
+	
+						}
+	
 					}
 
+					if(0 && "subtractive rhymes") {
+
+						// SUBTRACTIVE RHYMES
+						$rhyming_syllable_subtractive = $syllable["vowel"];
+						
+						if($syllable["vowel_long"]) {
+							$rhyming_syllable_subtractive .= ":";
+							if($syllable["stoed"]) {
+								$rhyming_syllable_subtractive .= "\\\?";
+							}
+						}
+	
+						$stoed_isset = false;
+						if($syllable["ending_consonants"]) {
+	
+							if($syllable["stoed"]) {
+								$rhyming_syllable_subtractive .= "(:\\\?)?";
+							}
+	
+							foreach($syllable["ending_consonants"] as $consonant) {
+		
+								if(preg_match("/".SINGABLE_CONSONANTS_REGEX."/", $consonant) && !$syllable["vowel_long"] && $syllable["stoed"] && !$stoed_isset) {
+									
+									$rhyming_syllable_subtractive .= "(".$consonant."\\\?)?";
+									$stoed_isset = true;
+									
+								}
+								else {
+									
+									$rhyming_syllable_subtractive .= "(".$consonant.")?";
+								}
+							}
+						}
+						debug("subtractive rhyme: ".$rhyming_syllable_subtractive);
+	
+						
+	
+						$results = $this->findRhymes($rhyming_syllable_subtractive);
+						if($results) {
+	
+							foreach($results as $result) {
+	
+								// remove overlaps with perfect rhymes, family_rhymes, additive_rhymes
+								if(
+									arrayKeyValue($perfect_rhymes,"id", $result["id"]) === false
+									&& arrayKeyValue($family_rhymes,"id", $result["id"]) === false
+									&& arrayKeyValue($additive_rhymes,"id", $result["id"]) === false
+									) {
+									
+									$subtractive_rhymes[] = $result;
+								}
+							}
+	
+						}
+	
+					}
+
+					if(0 && "misc rhymes") {
+
+						// MISC RHYMES (family/additive/subtractive combinations)
+						$rhyming_syllable_misc = $syllable["vowel"];
+						
+						if($syllable["vowel_long"]) {
+							$rhyming_syllable_misc .= ":";
+							if($syllable["stoed"]) {
+								$rhyming_syllable_misc .= "\\\?";
+							}
+						}
+	
+						$stoed_isset = false;
+						if($syllable["ending_consonants"]) {
+	
+							if($syllable["stoed"]) {
+								$rhyming_syllable_misc .= "(:\\\?)?";
+							}
+	
+							$rhyming_syllable_misc .= "(".CONSONANTS_REGEX.")?";
+	
+							foreach($syllable["ending_consonants"] as $consonant) {
+		
+								$consonant_family = implode("|", $phonetic_relatives[$consonant]);
+	
+								if(preg_match("/".SINGABLE_CONSONANTS_REGEX."/", $consonant) && !$syllable["vowel_long"] && $syllable["stoed"] && !$stoed_isset) {
+									
+									$rhyming_syllable_misc .= "(".$consonant."|".$consonant_family."\\\?)?(".CONSONANTS_REGEX.")?";
+									$stoed_isset = true;
+									
+								}
+								else {
+									
+									$rhyming_syllable_misc .= "(".$consonant."|".$consonant_family.")?(".CONSONANTS_REGEX.")?";
+								}
+							}
+						}
+						debug("misc rhyme: ".$rhyming_syllable_misc);
+	
+						$results = $this->findRhymes($rhyming_syllable_misc);
+						if($results) {
+	
+							foreach($results as $result) {
+	
+								// remove overlaps with perfect rhymes, family_rhymes, additive_rhymes
+								if(
+									arrayKeyValue($perfect_rhymes,"id", $result["id"]) === false
+									&& arrayKeyValue($family_rhymes,"id", $result["id"]) === false
+									&& arrayKeyValue($additive_rhymes,"id", $result["id"]) === false
+									&& arrayKeyValue($subtractive_rhymes,"id", $result["id"]) === false
+									) {
+									
+									$misc_rhymes[] = $result;
+								}
+							}
+	
+						}
+	
+					}
+
+					$rhymes["single_syllable"]["perfect"] = $perfect_rhymes;
+					$rhymes["single_syllable"]["family"] = $family_rhymes;
+
+					$rhymes["single_syllable"]["perfect_add_plosive"] = $perfect_add_plosive_rhymes;
+					$rhymes["single_syllable"]["perfect_subtract_plosive"] = $perfect_subtract_plosive_rhymes;
+					$rhymes["single_syllable"]["perfect_add_plosives"] = $perfect_add_plosives_rhymes;
+					$rhymes["single_syllable"]["perfect_subtract_plosives"] = $perfect_subtract_plosives_rhymes;
+					$rhymes["single_syllable"]["perfect_add_fricative"] = $perfect_add_fricative_rhymes;
+					$rhymes["single_syllable"]["perfect_subtract_fricative"] = $perfect_subtract_fricative_rhymes;
+					$rhymes["single_syllable"]["perfect_add_fricatives"] = $perfect_add_fricatives_rhymes;
+					$rhymes["single_syllable"]["perfect_subtract_fricatives"] = $perfect_subtract_fricatives_rhymes;
+					$rhymes["single_syllable"]["perfect_add_short_consonants"] = $perfect_add_short_consonants_rhymes;
+					$rhymes["single_syllable"]["perfect_subtract_short_consonants"] = $perfect_subtract_short_consonants_rhymes;
+					$rhymes["single_syllable"]["perfect_subtract_add_short_consonants"] = $perfect_subtract_add_short_consonants_rhymes;
+
+					$rhymes["single_syllable"]["family_add_plosive"] = $family_add_plosive_rhymes;
+					$rhymes["single_syllable"]["family_subtract_plosive"] = $family_subtract_plosive_rhymes;
+					$rhymes["single_syllable"]["family_add_plosives"] = $family_add_plosives_rhymes;
+					$rhymes["single_syllable"]["family_subtract_plosives"] = $family_subtract_plosives_rhymes;
+					$rhymes["single_syllable"]["family_add_fricative"] = $family_add_fricative_rhymes;
+					$rhymes["single_syllable"]["family_subtract_fricative"] = $family_subtract_fricative_rhymes;
+					$rhymes["single_syllable"]["family_add_fricatives"] = $family_add_fricatives_rhymes;
+					$rhymes["single_syllable"]["family_subtract_fricatives"] = $family_subtract_fricatives_rhymes;
+					$rhymes["single_syllable"]["family_add_short_consonants"] = $family_add_short_consonants_rhymes;
+					$rhymes["single_syllable"]["family_subtract_short_consonants"] = $family_subtract_short_consonants_rhymes;
+					$rhymes["single_syllable"]["family_subtract_add_short_consonants"] = $family_subtract_add_short_consonants_rhymes;
+					
 					$rhymes["single_syllable"]["additive"] = $additive_rhymes;
-
-					// SUBTRACTIVE RHYMES
-					$rhyming_syllable_subtractive = $syllable["vowel"];
-					
-					if($syllable["vowel_long"]) {
-						$rhyming_syllable_subtractive .= ":";
-						if($syllable["stoed"]) {
-							$rhyming_syllable_subtractive .= "\\\?";
-						}
-					}
-
-					$stoed_isset = false;
-					if($syllable["ending_consonants"]) {
-
-						if($syllable["stoed"]) {
-							$rhyming_syllable_subtractive .= "(:\\\?)?";
-						}
-
-						foreach($syllable["ending_consonants"] as $consonant) {
-	
-							if(preg_match("/".$singable_consonants_regex."/", $consonant) && !$syllable["vowel_long"] && $syllable["stoed"] && !$stoed_isset) {
-								
-								$rhyming_syllable_subtractive .= "(".$consonant."\\\?)?";
-								$stoed_isset = true;
-								
-							}
-							else {
-								
-								$rhyming_syllable_subtractive .= "(".$consonant.")?";
-							}
-						}
-					}
-					debug("subtractive rhyme: ".$rhyming_syllable_subtractive);
-
-					
-
-					$results = $this->findRhymes($rhyming_syllable_subtractive);
-					if($results) {
-
-						foreach($results as $result) {
-
-							// remove overlaps with perfect rhymes, family_rhymes, additive_rhymes
-							if(
-								arrayKeyValue($perfect_rhymes,"id", $result["id"]) === false
-								&& arrayKeyValue($family_rhymes,"id", $result["id"]) === false
-								&& arrayKeyValue($additive_rhymes,"id", $result["id"]) === false
-								) {
-								
-								$subtractive_rhymes[] = $result;
-							}
-						}
-
-					}
-
 					$rhymes["single_syllable"]["subtractive"] = $subtractive_rhymes;
-
-					// MISC RHYMES (family/additive/subtractive combinations)
-					$rhyming_syllable_misc = $syllable["vowel"];
-					
-					if($syllable["vowel_long"]) {
-						$rhyming_syllable_misc .= ":";
-						if($syllable["stoed"]) {
-							$rhyming_syllable_misc .= "\\\?";
-						}
-					}
-
-					$stoed_isset = false;
-					if($syllable["ending_consonants"]) {
-
-						if($syllable["stoed"]) {
-							$rhyming_syllable_misc .= "(:\\\?)?";
-						}
-
-						$rhyming_syllable_misc .= "(".$consonants_regex.")?";
-
-						foreach($syllable["ending_consonants"] as $consonant) {
-	
-							$consonant_family = implode("|", $phonetic_relatives[$consonant]);
-
-							if(preg_match("/".$singable_consonants_regex."/", $consonant) && !$syllable["vowel_long"] && $syllable["stoed"] && !$stoed_isset) {
-								
-								$rhyming_syllable_misc .= "(".$consonant."|".$consonant_family."\\\?)?(".$consonants_regex.")?";
-								$stoed_isset = true;
-								
-							}
-							else {
-								
-								$rhyming_syllable_misc .= "(".$consonant."|".$consonant_family.")?(".$consonants_regex.")?";
-							}
-						}
-					}
-					debug("misc rhyme: ".$rhyming_syllable_misc);
-
-					$results = $this->findRhymes($rhyming_syllable_misc);
-					if($results) {
-
-						foreach($results as $result) {
-
-							// remove overlaps with perfect rhymes, family_rhymes, additive_rhymes
-							if(
-								arrayKeyValue($perfect_rhymes,"id", $result["id"]) === false
-								&& arrayKeyValue($family_rhymes,"id", $result["id"]) === false
-								&& arrayKeyValue($additive_rhymes,"id", $result["id"]) === false
-								&& arrayKeyValue($subtractive_rhymes,"id", $result["id"]) === false
-								) {
-								
-								$misc_rhymes[] = $result;
-							}
-						}
-
-					}
-
 					$rhymes["single_syllable"]["misc"] = $misc_rhymes;
+
 				}
-				elseif($syllable_count > 1) {
+				elseif($syllable_count == 2) {
 
 					if($stressed_syllable_count == 1) {
 
-						// jambe eller trokæ
+						// jambe
+						if($syllables(arrayKeyValue($syllables, "stress_rank", 0))["position"] == 1) {
+
+
+						}
+
+						// trokæ
 					}
 					elseif($stressed_syllable_count == 2) {
 
@@ -657,7 +1639,7 @@ class Word extends Model {
 
 						// 	$rhyming_syllable = preg_split('/%/', $rhyming_syllable)[1];
 							
-						// 	$beginning_consonants = preg_split($vowels_regex, $rhyming_syllable)[0];
+						// 	$beginning_consonants = preg_split(VOWELS_REGEX, $rhyming_syllable)[0];
 						// 	if($beginning_consonants) {
 								
 						// 		// remove beginning consonants in rhyming syllable
@@ -707,7 +1689,8 @@ class Word extends Model {
 
 				if($rhymes) {
 					// var_dump($rhymes);
-	
+					debug("rhyme count: ".count($all_rhymes));
+
 					return $rhymes;
 				}
 
@@ -715,6 +1698,73 @@ class Word extends Model {
 				
 			}
 		}
+	}
+
+	function queryPerfect($syllable, $_options = false) {
+
+		if($_options !== false) {
+			foreach($_options as $_option => $_value) {
+				switch($_option) {
+
+					case "discard_stoed"                : $discard_stoed                = $_value; break;
+
+				}
+			}
+		}
+
+		$rhyming_syllable_perfect = $syllable["vowel"];
+	
+		if($discard_stoed) {
+			$rhyming_syllable_perfect .= "(:)?";
+			$rhyming_syllable_perfect .= "(\\\?)?";
+		}
+		else {
+
+			if($syllable["vowel_long"]) {
+				$rhyming_syllable_perfect .= ":";
+				if($syllable["stoed"]) {
+					$rhyming_syllable_perfect .= "\\\?";
+				}
+			}
+		}
+
+		if($syllable["ending_consonants"]) {
+			$stoed_isset = false;
+			foreach($syllable["ending_consonants"] as $consonant) {
+				
+				if($discard_stoed) {
+					
+					if(preg_match("/".SINGABLE_CONSONANTS_REGEX."/", $consonant) && !$stoed_isset) {
+						
+						$rhyming_syllable_perfect .= $consonant."\\\?";
+						$stoed_isset = true;
+						
+					}
+					else {
+						
+						$rhyming_syllable_perfect .= $consonant;
+					}
+				}
+				else {
+
+					if(preg_match("/".SINGABLE_CONSONANTS_REGEX."/", $consonant) && !$syllable["vowel_long"] && $syllable["stoed"] && !$stoed_isset) {
+						
+						$rhyming_syllable_perfect .= $consonant."\\\?";
+						$stoed_isset = true;
+						
+					}
+					else {
+						
+						$rhyming_syllable_perfect .= $consonant;
+					}
+				}
+
+			}
+		}
+		
+		debug("perfect rhyme: ".$rhyming_syllable_perfect);
+
+		return $rhyming_syllable_perfect;
 	}
 
 	function findRhymes($rhyming_syllable, $_options = false) {
@@ -728,6 +1778,8 @@ class Word extends Model {
 		$symbols = ["?",'"',"%","¤","$","_"];
 		$symbols_regex = "?|\"|%|¤|$|_";
 
+		$discard_stoed = false;
+
 		if($_options !== false) {
 			foreach($_options as $_option => $_value) {
 				switch($_option) {
@@ -739,21 +1791,95 @@ class Word extends Model {
 			}
 		}
 
-		// print "<di'v>rhyming syllable: ".$rhyming_syllable."</di'v>";
+		// print "<div>rhyming syllable: ".$rhyming_syllable."</div>";
 
-		$sql = "SELECT words.*, LOWER(REVERSE(words.name)) AS rev_name, transcriptions.transcription FROM ".$this->db." AS words JOIN ". $this->db_transcriptions ." AS transcriptions ON words.id=transcriptions.word_id WHERE transcriptions.transcription REGEXP '(\"|%)$consonants_regex*".$rhyming_syllable."$' COLLATE UTF8_BIN ORDER BY rev_name";
-		// print $sql;
-		if($query->sql($sql)) {
-
-			$rhymes = $query->results();
-
-			return $rhymes;
-
+		if($rhyming_syllable) {
+			
+			$sql = "SELECT words.*, LOWER(REVERSE(words.name)) AS rev_name, transcriptions.transcription FROM ".$this->db." AS words JOIN ". $this->db_transcriptions ." AS transcriptions ON words.id=transcriptions.word_id WHERE transcriptions.transcription REGEXP '(\"|%)".CONSONANTS_REGEX."*".$rhyming_syllable."$' COLLATE UTF8_BIN ORDER BY rev_name";
+			print $sql;
+			if($query->sql($sql)) {
+	
+				$rhymes = $query->results();
+	
+				return $rhymes;
+	
+			}
 		}
 
 		return false;
 	}
 
+	function phoneticSearch($action) {
+	
+		$this->getPostedEntities();
+
+		if(count($action) == 1) {
+
+			$query = new Query();
+
+			$search_string = getPost("search_string");
+			$query_string = '';
+
+			// $stoed = '(\\\?)?';
+
+			// divide into syllables
+			$syllables = preg_split("/-/", $search_string);
+
+			foreach($syllables as $key => $syllable) {
+
+				$syllable = preg_replace('/@/', '('.VOWELS_REGEX.')+', $syllable);
+				$syllable = preg_replace('/!/', '('.CONSONANTS_REGEX.')', $syllable);
+				$syllable = preg_replace('/\./', '('.CONSONANTS_REGEX.'|'.VOWELS_REGEX.')', $syllable);
+				$syllable = preg_replace('/\$/', '('.CONSONANTS_REGEX.')*('.VOWELS_REGEX.')+('.CONSONANTS_REGEX.')*', $syllable);
+				
+				// handle stress
+				if(preg_match('/(^\d{1,2}(?=\D))/', $syllable)) {
+	
+					$syllable = preg_replace('/^1(?=\D)/', '\"', $syllable);
+					$syllable = preg_replace('/^2(?=\D)/', '%', $syllable);
+					$syllable = preg_replace('/^12(?=\D)/', '(\"|%)', $syllable);
+					$syllable = preg_replace('/^02(?=\D)/', '%?', $syllable);
+					$syllable = preg_replace('/^0(?=\D)/', '', $syllable);
+				}
+				else {
+					$syllable = '(\"|%)?'.$syllable;
+				}
+
+				if($key !== 0) {
+					$syllable = '\\\$'.$syllable;
+				}
+
+
+				// handle stoed 
+				// ; stød, ;? muligt stød, : længde, :? mulig længde, , ingen stød og længde 
+				if(preg_match("/(".VOWELS_REGEX.")+(".SINGABLE_CONSONANTS_REGEX.")/", $syllable, $matches, PREG_OFFSET_CAPTURE)) {
+					// insert optional length/stoed
+					$syllable = substr_replace($syllable, "(:)?(\\\?))", $matches[1], 0);
+				}
+				else if(preg_match("/(".VOWELS_REGEX.")+/", $syllable)) {
+					// insert optional length/stoed
+				}
+
+				// handle length
+
+				$query_string .= '('.$syllable.')';
+			}
+
+			
+
+			$sql = "SELECT words.*, LOWER(REVERSE(words.name)) AS rev_name, transcriptions.transcription FROM ".$this->db." AS words JOIN ". $this->db_transcriptions ." AS transcriptions ON words.id=transcriptions.word_id WHERE transcriptions.transcription REGEXP '^$query_string$' COLLATE UTF8_BIN ORDER BY rev_name";
+			print $sql;
+			if($query->sql($sql)) {
+	
+				$results = $query->results();
+	
+				return $results;
+	
+			}
+
+		}
+		
+	}
 }
 
 ?>
