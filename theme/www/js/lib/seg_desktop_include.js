@@ -12,5 +12,6 @@ document.write('<script type="text/javascript" src="/js/lib/desktop/i-demo.js"><
 document.write('<script type="text/javascript" src="/js/lib/desktop/i-login.js"></script>');
 document.write('<script type="text/javascript" src="/js/lib/desktop/i-seeds.js"></script>');
 document.write('<script type="text/javascript" src="/js/lib/desktop/i-seed_edit.js"></script>');
-document.write('<script type="text/javascript" src="/js/lib/desktop/i-rhymes.js"></script>');
+document.write('<script type="text/javascript" src="/js/lib/desktop/m-rhymes.js"></script>');
+document.write('<script type="text/javascript" src="/js/lib/desktop/m-phonetic_search.js"></script>');
 

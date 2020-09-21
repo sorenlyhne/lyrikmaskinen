@@ -9,4 +9,6 @@
 @import url(/css/lib/desktop/s-form.css);
 @import url(/css/lib/desktop/s-hovers.css);
 
+@import url(/css/lib/desktop/s-phonetic_search.css);
+
 @import url(/assets/tabulator-master/dist/css/tabulator.min.css);

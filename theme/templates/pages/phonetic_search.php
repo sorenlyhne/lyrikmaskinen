@@ -28,8 +28,11 @@ global $results;
 		<? if($results): ?>
 			<ul class="results">
 				<? foreach($results as $result): ?>
-				<li>
-				<?= $result["name"] ?>
+				<li class="result">
+					<span class="name"><?= $result["name"] ?></span>
+					<span class="word_class">(<?= $result["extended_pos"] ?>)</span>				
+					<span class="id"><?= $result["id"] ?></span>
+					<span class="transcription"><?= $result["transcription"] ?></span>
 				</li>	
 				<? endforeach; ?>
 			</ul>

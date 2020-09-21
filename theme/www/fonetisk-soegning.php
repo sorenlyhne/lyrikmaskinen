@@ -20,6 +20,7 @@ $page->pageTitle("Fonetisk søgning");
 
 if($action) {
 
+	
 	if($action[0] == "phoneticSearch") {
 
 		$results = $WC->phoneticSearch($action);
@@ -30,13 +31,11 @@ if($action) {
 				"templates" => "pages/phonetic_search.php"
 				)
 			);
+			// header("Location: fonetisk-soegning");
 			exit();
 		}
-		else {
-
-		}
 	}
-
+		
 	// Class interface
 	// if($page->validateCsrfToken() && preg_match("/[a-zA-Z]+/", $action[0])) {
 
@@ -50,11 +49,12 @@ if($action) {
 	// }
 	
 }
-	$page->page(array(
-		"templates" => "pages/phonetic_search.php"
-		)
-	);
-	exit();
+
+$page->page(array(
+	"templates" => "pages/phonetic_search.php"
+	)
+);
+exit();
 
 
 ?>

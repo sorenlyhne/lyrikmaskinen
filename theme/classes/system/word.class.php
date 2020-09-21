@@ -49,7 +49,16 @@ class Word extends Model {
 			"label" => "original_id",
 		));
 
-		define("VOWELS_REGEX", "i:|i|y:|y|e:|e|2:|2|9:|9|E:|E|u:|u|o:|o|O:|O|Q:|Q|6|A:|A|a|a:|@");
+		// 2 = ø (føre, synder)
+		// 9 = Ø (fyrre, sønner)
+		// E = æ (mæt, kæde)
+		// O = å (rå, rust)
+		// Q = o (vor, morse)
+		// 6 = o (råt)
+		// @ = schwa 
+
+		define("VOWELS_REGEX", "i:|i|y:|y|e:|e|2:|2|9:|9|E:|E|u:|u|o:|o|O:|O|Q:|Q|6|A:|A|a:|a|@");
+		define("SHORT_VOWELS_REGEX", "i|y|e|2|9|E|u|o|O|Q|6|A|a|@");
 		define("CONSONANTS_REGEX", "p|b|t|d|k|g|f|v|s|h|s\'|m|n|N|R|l|j|D|w");
 		define("SINGABLE_CONSONANTS_REGEX", "m|n|N|R|l|j|D|w");
 		define("PLOSIVES_REGEX", "p|b|t|d|k|g");
@@ -1823,14 +1832,14 @@ class Word extends Model {
 			// $stoed = '(\\\?)?';
 
 			// divide into syllables
-			$syllables = preg_split("/-/", $search_string);
+			$syllables = preg_split("/\-/", $search_string);
 
 			foreach($syllables as $key => $syllable) {
 
-				$syllable = preg_replace('/@/', '('.VOWELS_REGEX.')+', $syllable);
+				$syllable = preg_replace('/@/', '('.SHORT_VOWELS_REGEX.')+', $syllable);
 				$syllable = preg_replace('/!/', '('.CONSONANTS_REGEX.')', $syllable);
-				$syllable = preg_replace('/\./', '('.CONSONANTS_REGEX.'|'.VOWELS_REGEX.')', $syllable);
-				$syllable = preg_replace('/\$/', '('.CONSONANTS_REGEX.')*('.VOWELS_REGEX.')+('.CONSONANTS_REGEX.')*', $syllable);
+				$syllable = preg_replace('/\./', '('.CONSONANTS_REGEX.'|'.SHORT_VOWELS_REGEX.')', $syllable);
+				$syllable = preg_replace('/\$/', '('.CONSONANTS_REGEX.')*('.SHORT_VOWELS_REGEX.')+('.CONSONANTS_REGEX.')*', $syllable);
 				
 				// handle stress
 				if(preg_match('/(^\d{1,2}(?=\D))/', $syllable)) {
@@ -1848,19 +1857,201 @@ class Word extends Model {
 				if($key !== 0) {
 					$syllable = '\\\$'.$syllable;
 				}
+				
+
+				// get vowels with length and stoed
+				preg_match_all("/(".SHORT_VOWELS_REGEX."){1,2}(:\\\'|:\?|:)?(;\\\'|;\?|;)?(?=\||\)|(".CONSONANTS_REGEX.")?)/", $syllable, $vowels);
 
 
-				// handle stoed 
-				// ; stød, ;? muligt stød, : længde, :? mulig længde, , ingen stød og længde 
-				if(preg_match("/(".VOWELS_REGEX.")+(".SINGABLE_CONSONANTS_REGEX.")/", $syllable, $matches, PREG_OFFSET_CAPTURE)) {
-					// insert optional length/stoed
-					$syllable = substr_replace($syllable, "(:)?(\\\?))", $matches[1], 0);
+				$parentheses_length = false;
+				$parentheses_stoed = false;
+
+				// vowel is in parentheses
+				if(preg_match("/(\((?:(?:".SHORT_VOWELS_REGEX.")(?::\\\'|:\?|:)?(?:;\\\'|;\?|;)?)(?:\|(?:".SHORT_VOWELS_REGEX.")(?::\\\'|:\?|:)?(?:;\\\'|;\?|;)?)*\))(:\\\'|:\?|:)?(;\\\'|;\?|;)?/", $syllable, $matches)) {
+					
+					$parentheses_vowels_length_stoed = $matches[0];
+					$parentheses_vowels_length_stoed = strtr($parentheses_vowels_length_stoed, ['(' => '\(', ')' => '\)', '|' => '\|', "\'" => "\\\\'"]);
+
+					if($matches[1]) {
+
+						$parentheses_vowels = $matches[1];
+					}
+					if($matches[2]) {
+
+						if(preg_match("/:\\\'/", $matches[2])) {
+
+							$parentheses_length = "";
+						}
+						else if(preg_match("/:\?/", $matches[2])) {
+
+							$parentheses_length = ":?";
+						}
+						else if(preg_match("/:/", $matches[2])) {
+
+							$parentheses_length = ":";
+						}
+						
+					}
+					if($matches[3]) {
+
+						if(preg_match("/;\\\'/", $matches[3])) {
+
+							$parentheses_stoed = "";
+						}
+						else if(preg_match("/;\?/", $matches[3])) {
+
+							$parentheses_stoed = "\\\\\\??";
+						}
+						else if(preg_match("/;/", $matches[3])) {
+
+							$parentheses_stoed = "\\\\\\?";
+						}
+						
+					}
+
+					// remove length/stoed from parentheses in order to put them back in for each single vowel
+					$syllable = preg_replace("/".$parentheses_vowels_length_stoed."/", $parentheses_vowels, $syllable);
 				}
-				else if(preg_match("/(".VOWELS_REGEX.")+/", $syllable)) {
-					// insert optional length/stoed
+
+				foreach($vowels[0] as $vowel_length_stoed) {
+
+					preg_match("/(".SHORT_VOWELS_REGEX."){1,2}/", $vowel_length_stoed, $matches);
+					$vowel = $matches[0];
+
+
+					// vowel has explicitally no length and explicitally no stoed
+					if(preg_match("/:\\\';\\\'/", $vowel_length_stoed)) {
+						
+						$syllable = preg_replace("/".$vowel.":\\\';\\\'/", $vowel, $syllable);
+					}
+					// vowel has explicitally no length and explicitally optional stoed
+					else if(preg_match("/:\\\';\?/", $vowel_length_stoed)) {
+						
+						$syllable = preg_replace("/".$vowel.":\\\';\?/", $vowel."\\\\\\??", $syllable);
+					}
+					// vowel has explicitally no length and explicit stoed
+					else if(preg_match("/:\\\';/", $vowel_length_stoed)) {
+						
+						$syllable = preg_replace("/".$vowel.":\\\';/", $vowel."\\\\\\?", $syllable);
+					}
+					// vowel has explicitally no length and non-specified stoed
+					else if(preg_match("/:\\\'/", $vowel_length_stoed)) {
+
+						// check if parentheses have stoed
+						$syllable = preg_replace("/".$vowel.":\\\'/", $vowel.($parentheses_stoed ?: "\\\\\\??"), $syllable);
+						// $syllable = preg_replace("/".$vowel.":\\\'/", $vowel."\\\\\\??", $syllable);
+					}
+					// vowel has explicitally optional length and explicitally no stoed
+					else if(preg_match("/:\?;\\\'/", $vowel_length_stoed)) {
+						
+						$syllable = preg_replace("/".$vowel.":\?;\\\'/", $vowel.":?", $syllable);
+					}
+					// vowel has explicitally optional length and explicitally optional stoed
+					else if(preg_match("/:\?;\?/", $vowel_length_stoed)) {
+						
+						$syllable = preg_replace("/".$vowel.":\?;\?/", $vowel.":?\\\\\\??", $syllable);
+					}
+					// vowel has explicitally optional length and explicit stoed
+					else if(preg_match("/:\?;/", $vowel_length_stoed)) {
+						
+						$syllable = preg_replace("/".$vowel.":\?;/", $vowel.":?\\\\\\?", $syllable);
+					}
+					// vowel has explicitally optional length and non-specified stoed
+					else if(preg_match("/:\?/", $vowel_length_stoed)) {
+
+						// check if parenthesis have stoed
+
+						$syllable = preg_replace("/".$vowel.":\?/", $vowel.":?\\\\\\??", $syllable);
+					}
+					// vowel has explicit length and explicitally no stoed
+					else if(preg_match("/:;\\\'/", $vowel_length_stoed)) {
+						
+						$syllable = preg_replace("/".$vowel.":;\\\'/", $vowel.":", $syllable);
+					}
+					// vowel has explicit length and explicitally optional stoed
+					else if(preg_match("/:;\?/", $vowel_length_stoed)) {
+						
+						$syllable = preg_replace("/".$vowel.":;\?/", $vowel.":\\\\\\??", $syllable);
+					}
+					// vowel has explicit length and explicit stoed
+					else if(preg_match("/:;/", $vowel_length_stoed)) {
+						
+						$syllable = preg_replace("/".$vowel.":;/", $vowel.":\\\\\\?", $syllable);
+					}
+					// vowel has explicit length and non-specified stoed
+					else if(preg_match("/:/", $vowel_length_stoed)) {
+
+						// check if parenthesis have stoed
+
+						$syllable = preg_replace("/".$vowel.":/", $vowel.":\\\\\\??", $syllable);
+					}
+					// vowel has non-specified length and explicitally no stoed
+					else if(preg_match("/;\\\'/", $vowel_length_stoed)) {
+						
+						// check if parenthesis have length
+
+						$syllable = preg_replace("/".$vowel.";\\\'/", $vowel.":?", $syllable);
+					}
+					// vowel has non-specified length and explicitally optional stoed
+					else if(preg_match("/;\?/", $vowel_length_stoed)) {
+
+						// check if parenthesis have length
+
+						$syllable = preg_replace("/".$vowel.";\?/", $vowel.":?\\\\\\??", $syllable);
+					}
+					// vowel has non-specified length and explicit stoed
+					else if(preg_match("/;/", $vowel_length_stoed)) {
+						
+						// check if parenthesis have length
+
+						$syllable = preg_replace("/".$vowel.";/", $vowel.":?\\\\\\?", $syllable);
+					}
+					// vowel has non-specified length and non-specified stoed
+					else {
+
+						if($parentheses_length && $parentheses_stoed) {
+
+							// vowel is superseeded by singable consonant
+							if(preg_match("/".$parentheses_vowels_length_stoed."(".SINGABLE_CONSONANTS_REGEX.")/", $syllable, $matches)) {
+								
+								$vowel_singable_consonant = $matches[1];
+								$syllable = preg_replace("/".$matches[0]."/", $vowel.":?\\\\\\??".$vowel_singable_consonant."\\\\\\??", $syllable);
+							}
+							else {
+
+								$syllable = preg_replace("/".$vowel."/", $vowel.$parentheses_length.$parentheses_stoed, $syllable);
+							}
+
+						}
+						else if($parentheses_length) {
+							
+							$syllable = preg_replace("/".$vowel."/", $vowel.$parentheses_length."\\\\\\??", $syllable);
+						}
+						else if($parentheses_stoed) {
+							
+							$syllable = preg_replace("/".$vowel."/", $vowel.":?".$parentheses_stoed, $syllable);
+						}
+						else {
+							
+							// vowel is superseeded by singable consonant
+
+							if(preg_match("/".$vowel_length_stoed."(".SINGABLE_CONSONANTS_REGEX.")/", $syllable, $matches)) {
+								
+								$vowel_singable_consonant = $matches[1];
+								$syllable = preg_replace("/".$matches[0]."/", $vowel.":?\\\\\\??".$vowel_singable_consonant."\\\\\\??", $syllable);
+							}
+							else {
+
+								$syllable = preg_replace("/".$vowel."/", $vowel.":?\\\\\\??", $syllable);
+							}
+							
+						}
+						
+					}
+						
 				}
 
-				// handle length
+
 
 				$query_string .= '('.$syllable.')';
 			}
@@ -1868,7 +2059,7 @@ class Word extends Model {
 			
 
 			$sql = "SELECT words.*, LOWER(REVERSE(words.name)) AS rev_name, transcriptions.transcription FROM ".$this->db." AS words JOIN ". $this->db_transcriptions ." AS transcriptions ON words.id=transcriptions.word_id WHERE transcriptions.transcription REGEXP '^$query_string$' COLLATE UTF8_BIN ORDER BY rev_name";
-			print $sql;
+			// print $sql;
 			if($query->sql($sql)) {
 	
 				$results = $query->results();
@@ -1879,7 +2070,7 @@ class Word extends Model {
 
 		}
 		
-	}
+ 		}
 }
 
 ?>
