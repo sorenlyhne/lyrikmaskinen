@@ -26,6 +26,16 @@ class TypeSeed extends Itemtype {
 			"hint_message" => "Indtast et ord eller en frase.",
 			"error_message" => "Ups, du skal skrive noget her."
 		));
+
+		// Mediae
+		$this->addToModel("mediae", array(
+			"type" => "files",
+			"label" => "Add media here",
+			"max" => 20,
+			"allowed_formats" => "jpg,png",
+			"hint_message" => "Add images or videos here. Use png or jpg.",
+			"error_message" => "Media does not fit requirements.",
+		));
 		
 		$this->addToModel("type", array(
 			"type" => "radiobuttons",

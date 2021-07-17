@@ -22,7 +22,7 @@ $item = $IC->getItem(array("id" => $item_id, "extend" => array("tags" => true, "
 
 				<?= $model->input("name", array("value" => $item["name"])) ?>
 				<?= $model->input("v_text", array("class" => "autoexpand short", "value" => $item["v_text"])) ?>
-				<?= $model->inputHTML("v_html", array("value" => $item["v_html"])) ?>
+				<?= $model->input("v_html", array("value" => $item["v_html"])) ?>
 			</fieldset>
 
 			<?= $JML->editActions($item) ?>

@@ -27,26 +27,58 @@ class TypeWord extends Itemtype {
 			"hint_message" => "Type a new word",
 			"error_message" => "Something is wrong"
 		));
+
+		// Published at
+		$this->addToModel("published_at", array(
+			"type" => "datetime",
+			"label" => "Publish date (yyyy-mm-dd hh:mm)",
+			"hint_message" => "Publishing date of the item. Leave empty for current time.",
+			"error_message" => "Datetime must be of format yyyy-mm-dd hh:mm",
+		));
+
+		// Mediae
+		$this->addToModel("mediae", array(
+			"type" => "files",
+			"label" => "Add media here",
+			"max" => 20,
+			"allowed_formats" => "jpg,png",
+			"hint_message" => "Add images or videos here. Use png or jpg.",
+			"error_message" => "Media does not fit requirements.",
+		));
 		
 		$this->addToModel("extended_pos", array(
 			"type" => "string",
 			"label" => "extended_pos",
+			"hint_message" => "Extended pos",
+			"error_message" => "Something is wrong"
 		));
 		$this->addToModel("morphology", array(
 			"type" => "string",
 			"label" => "morphology",
+			"hint_message" => "Morphology",
+			"error_message" => "Something is wrong"
+
 		));
 		$this->addToModel("decomp", array(
 			"type" => "string",
 			"label" => "decomp",
+			"hint_message" => "Decomp",
+			"error_message" => "Something is wrong"
+
 		));
 		$this->addToModel("decpos", array(
 			"type" => "string",
 			"label" => "decpos",
+			"hint_message" => "Decpos",
+			"error_message" => "Something is wrong"
+
 		));
 		$this->addToModel("id", array(
 			"type" => "integer",
 			"label" => "id",
+			"hint_message" => "Id",
+			"error_message" => "Something is wrong"
+
 		));
 		
 	}
