@@ -1861,22 +1861,21 @@ class Word extends Model {
 
 				// get vowels with length and stoed
 				preg_match_all("/(".SHORT_VOWELS_REGEX."){1,2}(:\\\'|:\?|:)?(;\\\'|;\?|;)?(?=\||\)|(".CONSONANTS_REGEX.")?)/", $syllable, $vowels);
-
-
+				
+				$parentheses_vowels_length_stoed = false;
 				$parentheses_length = false;
 				$parentheses_stoed = false;
 
-				// vowel is in parentheses
+				// vowels are in parentheses
 				if(preg_match("/(\((?:(?:".SHORT_VOWELS_REGEX.")(?::\\\'|:\?|:)?(?:;\\\'|;\?|;)?)(?:\|(?:".SHORT_VOWELS_REGEX.")(?::\\\'|:\?|:)?(?:;\\\'|;\?|;)?)*\))(:\\\'|:\?|:)?(;\\\'|;\?|;)?/", $syllable, $matches)) {
 					
 					$parentheses_vowels_length_stoed = $matches[0];
-					$parentheses_vowels_length_stoed = strtr($parentheses_vowels_length_stoed, ['(' => '\(', ')' => '\)', '|' => '\|', "\'" => "\\\\'"]);
 
-					if(isset($matches[1])) {
+					if(isset($matches[1]) && $matches[1]) {
 
 						$parentheses_vowels = $matches[1];
 					}
-					if(isset($matches[2])) {
+					if(isset($matches[2]) && $matches[2]) {
 
 						if(preg_match("/:\\\'/", $matches[2])) {
 
@@ -1892,7 +1891,7 @@ class Word extends Model {
 						}
 						
 					}
-					if(isset($matches[3])) {
+					if(isset($matches[3]) && $matches[3]) {
 
 						if(preg_match("/;\\\'/", $matches[3])) {
 
@@ -1909,14 +1908,35 @@ class Word extends Model {
 						
 					}
 
+					$parentheses_vowels_length_stoed_esc = strtr($parentheses_vowels_length_stoed, ['(' => '\(', ')' => '\)', '|' => '\|', "\'" => "\\\\'", '?' => '\?']);
+
 					// remove length/stoed from parentheses in order to put them back in for each single vowel
-					$syllable = preg_replace("/".$parentheses_vowels_length_stoed."/", $parentheses_vowels, $syllable);
+					$syllable = preg_replace("/".$parentheses_vowels_length_stoed_esc."/", $parentheses_vowels, $syllable);
 				}
+				else {
+					// add parentheses around single vowel
+					$syllable = preg_replace("/".SHORT_VOWELS_REGEX."(:|:\\\'|:\?)?(;|;\\\'|;\?)?/", '($0)', $syllable);
+				}
+
+
+				$singable_consonant = false;
+				// vowel(s) are superseeded by singable consonant
+				if (preg_match("/\((?:(?:".SHORT_VOWELS_REGEX.")(?:\||\)))+(".SINGABLE_CONSONANTS_REGEX.")/", $syllable, $matches)) {
+
+					$singable_consonant = $matches[1];
+
+					// remove singable consonant in order to put it back in for each single vowel
+					$syllable = preg_replace("/(\(((".SHORT_VOWELS_REGEX.")(\||\)))+)(".SINGABLE_CONSONANTS_REGEX.")/", "$1", $syllable);
+					
+				}
+				
 
 				foreach($vowels[0] as $vowel_length_stoed) {
 
 					preg_match("/(".SHORT_VOWELS_REGEX."){1,2}/", $vowel_length_stoed, $matches);
 					$vowel = $matches[0];
+					$stoed = false;
+					$vowel_length_stoed_esc = strtr($vowel_length_stoed, ['(' => '\(', ')' => '\)', '|' => '\|', "\'" => "\\\\'", '?' => '\?']);
 
 
 					// vowel has explicitally no length and explicitally no stoed
@@ -1926,20 +1946,65 @@ class Word extends Model {
 					}
 					// vowel has explicitally no length and explicitally optional stoed
 					else if(preg_match("/:\\\';\?/", $vowel_length_stoed)) {
-						
-						$syllable = preg_replace("/".$vowel.":\\\';\?/", $vowel."\\\\\\??", $syllable);
+
+						if($singable_consonant) {
+
+							// place stoed symbol after singable consonant (since there is no length)
+							$syllable = preg_replace("/".$$vowel.":\\\';\?/", $vowel.$singable_consonant."\\\\\\??", $syllable);
+						}
+						else {
+							
+							// place stoed symbol after vowel
+							$syllable = preg_replace("/".$vowel.":\\\';\?/", $$vowel."\\\\\\??", $syllable);
+						}
+
 					}
 					// vowel has explicitally no length and explicit stoed
 					else if(preg_match("/:\\\';/", $vowel_length_stoed)) {
 						
-						$syllable = preg_replace("/".$vowel.":\\\';/", $vowel."\\\\\\?", $syllable);
+						if($singable_consonant) {
+
+							// place stoed symbol after singable consonant (since there is no length)
+							$syllable = preg_replace("/".$vowel.":\\\';/", $vowel.$singable_consonant."\\\\\\?", $syllable);
+						}
+						else {
+							
+							// place stoed symbol after vowel
+							$syllable = preg_replace("/".$vowel.":\\\';/", $$vowel."\\\\\\?", $syllable);
+						}
+
 					}
 					// vowel has explicitally no length and non-specified stoed
 					else if(preg_match("/:\\\'/", $vowel_length_stoed)) {
 
-						// check if parentheses have stoed
-						$syllable = preg_replace("/".$vowel.":\\\'/", $vowel.($parentheses_stoed ?: "\\\\\\??"), $syllable);
-						// $syllable = preg_replace("/".$vowel.":\\\'/", $vowel."\\\\\\??", $syllable);
+						if($parentheses_stoed !== false) {
+
+							if($singable_consonant) {
+	
+								// place stoed symbol after singable consonant (since there is no length)
+								$syllable = preg_replace("/".$vowel.":\\\'/", $vowel.$singable_consonant.$parentheses_stoed, $syllable);
+							}
+							else {
+								
+								// place stoed symbol after vowel
+								$syllable = preg_replace("/".$vowel.":\\\'/", $vowel.$parentheses_stoed, $syllable);
+							}
+						}
+						else {
+							
+							if($singable_consonant) {
+	
+								// place stoed symbol after singable consonant (since there is no length)
+								$syllable = preg_replace("/".$vowel.":\\\'/", $vowel.$singable_consonant."\\\\\\??", $syllable);
+							}
+							else {
+								
+								// place stoed symbol after vowel
+								$syllable = preg_replace("/".$vowel.":\\\'/", $vowel."\\\\\\??", $syllable);
+							}
+						}
+
+						
 					}
 					// vowel has explicitally optional length and explicitally no stoed
 					else if(preg_match("/:\?;\\\'/", $vowel_length_stoed)) {
@@ -1948,20 +2013,68 @@ class Word extends Model {
 					}
 					// vowel has explicitally optional length and explicitally optional stoed
 					else if(preg_match("/:\?;\?/", $vowel_length_stoed)) {
+
+						if($singable_consonant) {
+							
+							// place stoed symbol after either vowel or singable consonant (not both)
+							$syllable = preg_replace("/".$vowel.":\?;\?/", "(".$vowel.":?\\\\\\??".$singable_consonant."|".$vowel.":?".$singable_consonant."\\\\\\??)", $syllable);
+							
+						}
+						else {
+
+							// place stoed symbol after vowel
+							$syllable = preg_replace("/".$vowel.":\?;\?/", $vowel.":?\\\\\\??", $syllable);
+						}
 						
-						$syllable = preg_replace("/".$vowel.":\?;\?/", $vowel.":?\\\\\\??", $syllable);
 					}
 					// vowel has explicitally optional length and explicit stoed
 					else if(preg_match("/:\?;/", $vowel_length_stoed)) {
 						
-						$syllable = preg_replace("/".$vowel.":\?;/", $vowel.":?\\\\\\?", $syllable);
+
+						if($singable_consonant) {
+							
+							// place stoed symbol after either vowel or singable consonant (not both)
+							$syllable = preg_replace("/".$vowel.":\?;/", "(".$vowel.":?\\\\\\?".$singable_consonant."|".$vowel.":?".$singable_consonant."\\\\\\?)", $syllable);
+							
+						}
+						else {
+
+							// place stoed symbol after vowel
+							$syllable = preg_replace("/".$vowel.":\?;/", $vowel.":?\\\\\\?", $syllable);
+						}
 					}
 					// vowel has explicitally optional length and non-specified stoed
 					else if(preg_match("/:\?/", $vowel_length_stoed)) {
 
-						// check if parenthesis have stoed
+						if($parentheses_stoed !== false) {
 
-						$syllable = preg_replace("/".$vowel.":\?/", $vowel.":?\\\\\\??", $syllable);
+							if($singable_consonant) {
+								
+								// place stoed symbol after either vowel or singable consonant (not both)
+								$syllable = preg_replace("/".$vowel.":\?/", "(".$vowel.":?".$parentheses_stoed.$singable_consonant."|".$vowel.":?".$singable_consonant.$parentheses_stoed.")", $syllable);
+								
+							}
+							else {
+	
+								// place stoed symbol after vowel
+								$syllable = preg_replace("/".$vowel.":\?/", $vowel.":?".$parentheses_stoed, $syllable);
+							}
+						}
+						else {
+
+							if($singable_consonant) {
+								
+								// place stoed symbol after either vowel or singable consonant (not both)
+								$syllable = preg_replace("/".$vowel.":\?/", "(".$vowel.":?\\\\\\??".$singable_consonant."|".$vowel.":?".$singable_consonant."\\\\\\??)", $syllable);
+								
+							}
+							else {
+	
+								// place stoed symbol after vowel
+								$syllable = preg_replace("/".$vowel.":\?/", $vowel.":?\\\\\\??", $syllable);
+							}
+						}
+
 					}
 					// vowel has explicit length and explicitally no stoed
 					else if(preg_match("/:;\\\'/", $vowel_length_stoed)) {
@@ -1970,84 +2083,217 @@ class Word extends Model {
 					}
 					// vowel has explicit length and explicitally optional stoed
 					else if(preg_match("/:;\?/", $vowel_length_stoed)) {
-						
-						$syllable = preg_replace("/".$vowel.":;\?/", $vowel.":\\\\\\??", $syllable);
+					
+						if($singable_consonant) {
+
+							// place stoed symbol after either vowel or singable consonant
+							$syllable = preg_replace("/".$vowel.":;\?/", $vowel.":\\\\\\??".$singable_consonant."\\\\\\??", $syllable);
+
+						}
+						else {
+							
+							// place stoed symbol after vowel
+							$syllable = preg_replace("/".$vowel.":;\?/", $vowel."\\\\\\??", $syllable);
+						}
+
 					}
 					// vowel has explicit length and explicit stoed
 					else if(preg_match("/:;/", $vowel_length_stoed)) {
 						
-						$syllable = preg_replace("/".$vowel.":;/", $vowel.":\\\\\\?", $syllable);
+						
+						// vowel is superseeded by singable consonant
+						if($singable_consonant) {
+							
+							// place stoed symbol after either vowel or singable consonant (not both)
+							$syllable = preg_replace("/".$vowel.":;/", "(".$vowel.":\\\\\\?".$singable_consonant.")|(".$vowel.":".$singable_consonant."\\\\\\?)", $syllable);
+							
+						}
+						else {
+
+							// place stoed symbol after vowel
+							$syllable = preg_replace("/".$vowel.":;/", $vowel.":\\\\\\?", $syllable);
+						}
 					}
 					// vowel has explicit length and non-specified stoed
 					else if(preg_match("/:/", $vowel_length_stoed)) {
 
-						// check if parenthesis have stoed
+						if($parentheses_stoed !== false) {
 
-						$syllable = preg_replace("/".$vowel.":/", $vowel.":\\\\\\??", $syllable);
+							if($singable_consonant) {
+	
+								// place stoed symbol after either vowel or singable consonant
+								$syllable = preg_replace("/".$vowel.":/", "(".$vowel.":".$parentheses_stoed.$singable_consonant."|".$vowel.":".$singable_consonant.$parentheses_stoed.")", $syllable);
+
+							}
+							else {
+								
+								// place stoed symbol after vowel
+								$syllable = preg_replace("/".$vowel.":/", $vowel.":".$parentheses_stoed, $syllable);
+							}
+						}
+						else {
+
+							if($singable_consonant) {
+	
+								// place stoed symbol after either vowel or singable consonant
+								$syllable = preg_replace("/".$vowel.":".$singable_consonant."/", $vowel.":\\\\\\??".$singable_consonant."\\\\\\??", $syllable);
+	
+							}
+							else {
+								
+								// place stoed symbol after vowel
+								$syllable = preg_replace("/".$vowel.":/", $vowel."\\\\\\??", $syllable);
+							}
+						}
+
 					}
 					// vowel has non-specified length and explicitally no stoed
 					else if(preg_match("/;\\\'/", $vowel_length_stoed)) {
 						
-						// check if parenthesis have length
+						if($parentheses_length !== false) {
 
-						$syllable = preg_replace("/".$vowel.";\\\'/", $vowel.":?", $syllable);
+							$syllable = preg_replace("/".$vowel.";\\\'/", $vowel.$parentheses_length, $syllable);
+						}
+						else {
+							
+							$syllable = preg_replace("/".$vowel.";\\\'/", $vowel.":?", $syllable);
+						}
+
 					}
 					// vowel has non-specified length and explicitally optional stoed
 					else if(preg_match("/;\?/", $vowel_length_stoed)) {
 
 						// check if parenthesis have length
+						if($parentheses_length !== false) {
 
-						$syllable = preg_replace("/".$vowel.";\?/", $vowel.":?\\\\\\??", $syllable);
+							if($singable_consonant) {
+								
+								// place stoed symbol after either vowel or singable consonant (not both)
+								$syllable = preg_replace("/".$vowel.";\?/", "(".$vowel.$parentheses_length."\\\\\\??".$singable_consonant."|".$vowel.$parentheses_length.$singable_consonant."\\\\\\??)", $syllable);
+								
+							}
+							else {
+	
+								// place stoed symbol after vowel
+								$syllable = preg_replace("/".$vowel.";\?/", $vowel.":?\\\\\\??", $syllable);
+							}
+						}
+						else {
+
+							if($singable_consonant) {
+								
+								// place stoed symbol after either vowel or singable consonant (not both)
+								$syllable = preg_replace("/".$vowel.";\?/", "(".$vowel.":?\\\\\\??".$singable_consonant."|".$vowel.":?".$singable_consonant."\\\\\\??)", $syllable);
+								
+							}
+							else {
+	
+								// place stoed symbol after vowel
+								$syllable = preg_replace("/".$vowel.";\?/", $vowel.":?\\\\\\??", $syllable);
+							}
+						}
+
+
 					}
 					// vowel has non-specified length and explicit stoed
 					else if(preg_match("/;/", $vowel_length_stoed)) {
 						
-						// check if parenthesis have length
+						if($parentheses_length !== false) {
 
-						$syllable = preg_replace("/".$vowel.";/", $vowel.":?\\\\\\?", $syllable);
+							if($singable_consonant) {
+								
+								// place stoed symbol after either vowel or singable consonant (not both)
+								$syllable = preg_replace("/".$vowel.";/", "(".$vowel.$parentheses_length."\\\\\\?".$singable_consonant."|".$vowel.$parentheses_length.$singable_consonant."\\\\\\?)", $syllable);
+								
+							}
+							else {
+	
+								// place stoed symbol after vowel
+								$syllable = preg_replace("/".$vowel.";/", $vowel.$parentheses_length."\\\\\\?", $syllable);
+							}
+						}
+						else {
+
+							// vowel is superseeded by singable consonant
+							if($singable_consonant) {
+								
+								// place stoed symbol after either vowel or singable consonant (not both)
+								$syllable = preg_replace("/".$vowel.";/", "(".$vowel.":?\\\\\\?".$singable_consonant."|".$vowel.":?".$singable_consonant."\\\\\\?)", $syllable);
+								
+							}
+							else {
+	
+								// place stoed symbol after vowel
+								$syllable = preg_replace("/".$vowel.";/", $vowel.":?\\\\\\?", $syllable);
+							}
+						}
+
+
 					}
 					// vowel has non-specified length and non-specified stoed
 					else {
 
-						if($parentheses_length && $parentheses_stoed) {
 
-							// vowel is superseeded by singable consonant
-							if(preg_match("/".$parentheses_vowels_length_stoed."(".SINGABLE_CONSONANTS_REGEX.")/", $syllable, $matches)) {
+						if($parentheses_length !== false && $parentheses_stoed !== false) {
+
+							if($singable_consonant) {
 								
-								$vowel_singable_consonant = $matches[1];
-								$syllable = preg_replace("/".$matches[0]."/", $vowel.":?\\\\\\??".$vowel_singable_consonant."\\\\\\??", $syllable);
+								// place stoed symbol after either vowel or singable consonant (not both)
+								$syllable = preg_replace("/".$vowel."/", "(".$vowel.$parentheses_length.$parentheses_stoed.$singable_consonant."|".$vowel.$parentheses_length.$singable_consonant.$parentheses_stoed.")", $syllable);
+								
 							}
 							else {
-
+	
+								// place stoed symbol after vowel
 								$syllable = preg_replace("/".$vowel."/", $vowel.$parentheses_length.$parentheses_stoed, $syllable);
 							}
 
 						}
-						else if($parentheses_length) {
+						else if($parentheses_length !== false) {
 							
-							$syllable = preg_replace("/".$vowel."/", $vowel.$parentheses_length."\\\\\\??", $syllable);
+							if($singable_consonant) {
+								
+								// place stoed symbol after either vowel or singable consonant (not both)
+								$syllable = preg_replace("/".$vowel."/", "(".$vowel.$parentheses_length."\\\\\\??".$singable_consonant."|".$vowel.$parentheses_length.$singable_consonant."\\\\\\??)", $syllable);
+								
+							}
+							else {
+	
+								// place stoed symbol after vowel
+								$syllable = preg_replace("/".$vowel."/", $vowel.$parentheses_length."\\\\\\??", $syllable);
+							}
 						}
-						else if($parentheses_stoed) {
+						else if($parentheses_stoed !== false) {
 							
-							$syllable = preg_replace("/".$vowel."/", $vowel.":?".$parentheses_stoed, $syllable);
+							if($singable_consonant) {
+								
+								// place stoed symbol after either vowel or singable consonant (not both)
+								$syllable = preg_replace("/".$vowel."/", "(".$vowel.":?".$parentheses_stoed.$singable_consonant."|".$vowel.":?".$singable_consonant.$parentheses_stoed.")", $syllable);
+							}
+							else {
+	
+								// place stoed symbol after vowel
+								$syllable = preg_replace("/".$vowel."/", $vowel.":?".$parentheses_stoed, $syllable);
+							}
+							
 						}
 						else {
 							
-							// vowel is superseeded by singable consonant
-
-							if(preg_match("/".$vowel_length_stoed."(".SINGABLE_CONSONANTS_REGEX.")/", $syllable, $matches)) {
+							if($singable_consonant) {
 								
-								$vowel_singable_consonant = $matches[1];
-								$syllable = preg_replace("/".$matches[0]."/", $vowel.":?\\\\\\??".$vowel_singable_consonant."\\\\\\??", $syllable);
+								// place stoed symbol after either vowel or singable consonant (not both)
+								$syllable = preg_replace("/".$vowel."/", "(".$vowel.":?\\\\\\??".$singable_consonant."|".$vowel.":?".$singable_consonant."\\\\\\??)", $syllable);
+								
 							}
 							else {
-
+	
+								// place stoed symbol after vowel
 								$syllable = preg_replace("/".$vowel."/", $vowel.":?\\\\\\??", $syllable);
 							}
-							
 						}
 						
 					}
+
 						
 				}
 
