@@ -1872,11 +1872,11 @@ class Word extends Model {
 					$parentheses_vowels_length_stoed = $matches[0];
 					$parentheses_vowels_length_stoed = strtr($parentheses_vowels_length_stoed, ['(' => '\(', ')' => '\)', '|' => '\|', "\'" => "\\\\'"]);
 
-					if($matches[1]) {
+					if(isset($matches[1])) {
 
 						$parentheses_vowels = $matches[1];
 					}
-					if($matches[2]) {
+					if(isset($matches[2])) {
 
 						if(preg_match("/:\\\'/", $matches[2])) {
 
@@ -1892,7 +1892,7 @@ class Word extends Model {
 						}
 						
 					}
-					if($matches[3]) {
+					if(isset($matches[3])) {
 
 						if(preg_match("/;\\\'/", $matches[3])) {
 
